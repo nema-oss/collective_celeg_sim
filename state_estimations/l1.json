@@ -1,0 +1,13 @@
+{
+  "2": {
+    "p_off_food": 0.0,
+    "tau": -1,
+    "model_coeff": -3.2414877723169724,
+    "model_intercept": -4.2471821542825055,
+    "model_height": 0.31556685739982404,
+    "mean": 0,
+    "std": 1,
+    "p_relevant": 0,
+    "sign": 1
+  }
+}

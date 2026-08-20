@@ -1,0 +1,24 @@
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install everything ONCE
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    nano \
+    libgl1-mesa-glx \
+    curl \
+    g++ \
+    make \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cmake from source (pinned)
+WORKDIR /tmp
+RUN curl -L https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3.tar.gz | tar zx && \
+    cd cmake-3.28.3 && \
+    ./bootstrap && \
+    make -j$(nproc) && \
+    make install && \
+    cd / && rm -rf /tmp/cmake-3.28.3

@@ -1,0 +1,98 @@
+/opt/clion-2024.3.2/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/opt/clion-2024.3.2/bin/ninja/linux/x64/ninja -G Ninja -S /home/nema/CLionProjects/untitled2 -B /home/nema/CLionProjects/untitled2/cmake-build-debug
+CMake Error at /opt/clion-2024.3.2/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:838 (message):
+  Compiling the CUDA compiler identification source file
+  "CMakeCUDACompilerId.cu" failed.
+
+  Compiler: /usr/local/cuda-12.3/bin/nvcc
+
+  Build flags:
+
+  Id flags: --keep;--keep-dir;tmp -v
+
+
+
+  The output was:
+
+  1
+
+  #$ _NVVM_BRANCH_=nvvm
+
+  #$ _SPACE_=
+
+  #$ _CUDART_=cudart
+
+  #$ _HERE_=/usr/local/cuda-12.3/bin
+
+  #$ _THERE_=/usr/local/cuda-12.3/bin
+
+  #$ _TARGET_SIZE_=
+
+  #$ _TARGET_DIR_=
+
+  #$ _TARGET_DIR_=targets/x86_64-linux
+
+  #$ TOP=/usr/local/cuda-12.3/bin/..
+
+  #$ NVVMIR_LIBRARY_DIR=/usr/local/cuda-12.3/bin/../nvvm/libdevice
+
+  #$
+  LD_LIBRARY_PATH=/usr/local/cuda-12.3/bin/../lib:/usr/local/cuda-12.3/lib64:/usr/local/cuda-12.3/lib64:
+
+
+  #$
+  PATH=/usr/local/cuda-12.3/bin/../nvvm/bin:/usr/local/cuda-12.3/bin:/usr/local/cuda-12.3/bin:/usr/local/cuda-12.3/bin:/home/nema/.asdf/shims:/home/nema/.asdf/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/nema/.local/bin:/home/nema/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/opt/clion-2024.3.2/bin/ninja/linux/x64
+
+
+  #$ INCLUDES="-I/usr/local/cuda-12.3/bin/../targets/x86_64-linux/include"
+
+  #$ LIBRARIES=
+  "-L/usr/local/cuda-12.3/bin/../targets/x86_64-linux/lib/stubs"
+  "-L/usr/local/cuda-12.3/bin/../targets/x86_64-linux/lib"
+
+  #$ CUDAFE_FLAGS=
+
+  #$ PTXAS_FLAGS=
+
+  #$ rm tmp/a_dlink.reg.c
+
+  #$ gcc -D__CUDA_ARCH_LIST__=520 -E -x c++ -D__CUDACC__ -D__NVCC__
+  "-I/usr/local/cuda-12.3/bin/../targets/x86_64-linux/include"
+  -D__CUDACC_VER_MAJOR__=12 -D__CUDACC_VER_MINOR__=3
+  -D__CUDACC_VER_BUILD__=52 -D__CUDA_API_VER_MAJOR__=12
+  -D__CUDA_API_VER_MINOR__=3 -D__NVCC_DIAG_PRAGMA_SUPPORT__=1 -include
+  "cuda_runtime.h" -m64 "CMakeCUDACompilerId.cu" -o
+  "tmp/CMakeCUDACompilerId.cpp4.ii"
+
+  In file included from
+  /usr/local/cuda-12.3/bin/../targets/x86_64-linux/include/cuda_runtime.h:82,
+
+
+                   from <command-line>:
+
+  
+  /usr/local/cuda-12.3/bin/../targets/x86_64-linux/include/crt/host_config.h:143:2:
+  error: #error -- unsupported GNU version! gcc versions later than 12 are
+  not supported! The nvcc flag '-allow-unsupported-compiler' can be used to
+  override this version check; however, using an unsupported host compiler
+  may cause compilation failure or incorrect run time execution.  Use at your
+  own risk.
+
+    143 | #error -- unsupported GNU version! gcc versions later than 12 are not supported! The nvcc flag '-allow-unsupported-compiler' can be used to override this version check; however, using an unsupported host compiler may cause compilation failure or incorrect run time execution. Use at your own risk.
+        |  ^~~~~
+
+  # --error 0x1 --
+
+
+
+
+
+Call Stack (most recent call first):
+  /opt/clion-2024.3.2/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)
+  /opt/clion-2024.3.2/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCompilerId.cmake:53 (__determine_compiler_id_test)
+  /opt/clion-2024.3.2/bin/cmake/linux/x64/share/cmake-3.30/Modules/CMakeDetermineCUDACompiler.cmake:131 (CMAKE_DETERMINE_COMPILER_ID)
+  CMakeLists.txt:2 (project)
+
+
+CMake Error: CMAKE_C_COMPILER not set, after EnableLanguage
+CMake Error: CMAKE_CXX_COMPILER not set, after EnableLanguage
+-- Configuring incomplete, errors occurred!
