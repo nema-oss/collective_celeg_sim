@@ -267,7 +267,7 @@ __global__ void updateAgentStateCollective(
 
     int agent_state = agents[agent_id].state;
 
-    float p[N_STATES];
+    float p[N_STATES] = {0.0f};
 
     float p_irr = 0.0f;
     float p_r_raw[N_STATES];

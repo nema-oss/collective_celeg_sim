@@ -40,21 +40,63 @@ EPS                = 1e-6
 
 # ─── Parameter scaling ────────────────────────────────────────────────────────
 
-COEFF_RANGE     = (-5.0,  5.0)
-INTERCEPT_RANGE = (-20.0, 0)  # crossing always in valid N range
-HEIGHT_RANGE    = (0.0,   1.0)
+COEFF_RANGE     = (-0.5, 0.5)
+INTERCEPT_RANGE = (-50.0, 50.0)
+HEIGHT_RANGE    = (0.0, 1.0)
+L1_HEIGHT_RANGE  = (0.0, 1.0)
+L2_HEIGHT_RANGE  = (0.0, 2.0)
 
 '''PARAM_RANGES = [
     COEFF_RANGE if i % 2 == 0 else INTERCEPT_RANGE
     for i in range(24)
 ]'''
 # triplets: coeff, intercept, height — 1 for L1, 9 for L2
-PARAM_RANGES = [
+'''PARAM_RANGES = [
     COEFF_RANGE if i % 3 == 0 else
     INTERCEPT_RANGE if i % 3 == 1 else
     HEIGHT_RANGE
     for i in range(30)  # 3 + 27
+]'''
+
+PARAM_RANGES = []
+
+# L1: only state 2
+PARAM_RANGES += [
+    COEFF_RANGE,
+    INTERCEPT_RANGE,
+    L1_HEIGHT_RANGE,
 ]
+
+# L2
+# one fixed height per source state:
+# choose (0,0), (1,1), (2,2) as reference transitions
+REFERENCE_TRANSITIONS = {(0, 0), (1, 1), (2, 2)}
+
+for src, dst in TRANSITIONS:
+    PARAM_RANGES += [
+        COEFF_RANGE,
+        INTERCEPT_RANGE,
+    ]
+
+    if (src, dst) not in REFERENCE_TRANSITIONS:
+        PARAM_RANGES += [L2_HEIGHT_RANGE]
+
+L2_INDEX = {}
+idx = 3
+
+for src, dst in TRANSITIONS:
+    coeff_idx = idx
+    intercept_idx = idx + 1
+    idx += 2
+
+    if (src, dst) in REFERENCE_TRANSITIONS:
+        height_idx = None
+    else:
+        height_idx = idx
+        idx += 1
+
+    L2_INDEX[(src, dst)] = (coeff_idx, intercept_idx, height_idx)
+
 
 DOMAIN_W = 60.0
 DOMAIN_H = 60.0
@@ -105,14 +147,26 @@ def write_l1(params: np.ndarray):
         json.dump(l1, f, indent=2)
 
 
-def write_l2(params: np.ndarray):
+def write_l2(params):
     l2 = {str(s): {} for s in STATES}
-    for t_idx, (src, dst) in enumerate(TRANSITIONS):
-        coeff      = float(params[3 + t_idx * 3])
-        intercept  = float(params[3 + t_idx * 3 + 1])
-        height     = float(params[3 + t_idx * 3 + 2])
+
+    for src, dst in TRANSITIONS:
+        coeff_idx, intercept_idx, height_idx = L2_INDEX[(src, dst)]
+
+        coeff = float(params[coeff_idx])
+        intercept = float(params[intercept_idx])
+
+        if height_idx is None:
+            height = 1.0
+        else:
+            height = float(params[height_idx])
+
         p_off_food = OFF_FOOD[str(src)][str(dst)]
-        l2[str(src)][str(dst)] = _neutral_entry(coeff, intercept, height, p_off_food)
+
+        l2[str(src)][str(dst)] = _neutral_entry(
+            coeff, intercept, height, p_off_food
+        )
+
     with open(L2_PATH, "w") as f:
         json.dump(l2, f, indent=2)
 
@@ -247,30 +301,43 @@ def load_count_grid(path: Path) -> np.ndarray:
         return grid
 
 
-def cluster_metric_per_frame(grids: np.ndarray, worm_count: int, min_cluster_size: int = 4) -> np.ndarray:
-    """
-    Vectorized-per-frame: fraction of agents in the largest qualifying cluster,
-    for every timestep at once. Returns shape (n_steps,).
-    scipy.ndimage.label doesn't batch over a stack of independent 2D frames,
-    so we still loop over timesteps, but each frame's cluster sums are vectorized
-    via np.bincount instead of a manual per-cluster python loop.
-    """
+def cluster_metric_per_frame(
+        grids: np.ndarray,
+        worm_count: int,
+        min_cluster_size: int = 4
+) -> np.ndarray:
+
     n_steps = grids.shape[0]
     metrics = np.zeros(n_steps, dtype=np.float64)
+
+    structure_8 = np.ones((3, 3), dtype=np.int8)
 
     for t in range(n_steps):
         grid = grids[t]
         occupied = grid > 0
-        labeled, n_clusters = label(occupied)  # 4-connectivity
+
+        labeled, n_clusters = label(
+            occupied,
+            structure=structure_8
+        )
+
         if n_clusters == 0:
             continue
 
-        # sum of agents per cluster id (id 0 = background, ignore)
-        cluster_sums = np.bincount(labeled.ravel(), weights=grid.ravel(), minlength=n_clusters + 1)
-        cluster_sizes = np.bincount(labeled.ravel(), minlength=n_clusters + 1)
+        cluster_sums = np.bincount(
+            labeled.ravel(),
+            weights=grid.ravel(),
+            minlength=n_clusters + 1
+        )
+
+        cluster_sizes = np.bincount(
+            labeled.ravel(),
+            minlength=n_clusters + 1
+        )
 
         valid = cluster_sizes >= min_cluster_size
-        valid[0] = False  # background is never a valid cluster
+        valid[0] = False
+
         if not valid.any():
             continue
 
@@ -303,16 +370,16 @@ def evaluate_count_grid(x_norm: np.ndarray) -> dict:
 
         # time-averaged kurtosis: kurtosis of the per-cell count distribution at each
         # timestep, averaged over all timesteps
-        flat_per_t = grids.reshape(grids.shape[0], -1)  # (n_steps, grid_n*grid_n)
-        kurt_per_t = kurtosis(flat_per_t, axis=1, fisher=True)
-        ensemble_kurtosis.append(np.mean(kurt_per_t))
+        #flat_per_t = grids.reshape(grids.shape[0], -1)  # (n_steps, grid_n*grid_n)
+        #kurt_per_t = kurtosis(flat_per_t, axis=1, fisher=True)
+        #ensemble_kurtosis.append(np.mean(kurt_per_t))
 
         # time-averaged cluster metric
         cluster_per_t = cluster_metric_per_frame(grids, WORM_COUNT)
         ensemble_cluster_metric.append(np.mean(cluster_per_t))
 
     return {
-        "kurtosis": float(np.mean(ensemble_kurtosis)),
+        #"kurtosis": float(np.mean(ensemble_kurtosis)),
         "cluster_metric": float(np.mean(ensemble_cluster_metric)),
     }
 
@@ -328,8 +395,8 @@ def fitness_diffusion(metrics: dict) -> float:
 # ─── CMA-ES ───────────────────────────────────────────────────────────────────
 
 def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
-    x0 = np.zeros(30)
-
+    x0 = np.zeros(len(PARAM_RANGES))
+    n_params = len(PARAM_RANGES)
     es = cma.CMAEvolutionStrategy(
         x0,
         0.6,            # sigma in normalized space — 0.5 is a quarter of [-1,1]
@@ -339,7 +406,7 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
             "verbose": 1,
             "tolx":    1e-6,
             "tolfun":  1e-6,
-            "bounds": [[-1.0] * 30, [1.0] * 30],
+            "bounds": [[-1.0] * n_params, [1.0] * n_params],
         },
     )
 
