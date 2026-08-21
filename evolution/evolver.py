@@ -427,8 +427,8 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
             try:
                 metrics = evaluate_count_grid(sol)
                 fit     = fitness_fn(metrics)
-                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f}  "
-                      f"kurtosis={metrics['kurtosis']:.3f}  ")
+                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f}  ")
+                     # f"kurtosis={metrics['kurtosis']:.3f}  ")
             except Exception as e:
                 fit = 1e6
                 print(f"ERROR ({e})")
