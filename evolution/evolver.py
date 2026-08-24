@@ -175,13 +175,14 @@ def write_l2(params):
 
 def run_simulator(seed: int):
     result = subprocess.run(
-        ["bash", RUN_SCRIPT, str(seed)],
+        ["bash", RUN_SCRIPT, "--seed", str(seed)],
         cwd=SIM_ROOT,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        print("[SIM STDERR]", result.stderr[-2000:])
+        print("[SIM STDOUT]\n", result.stdout)
+        print("[SIM STDERR]\n", result.stderr)
         raise RuntimeError(f"Simulator exited with code {result.returncode}")
 
 
