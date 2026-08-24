@@ -26,7 +26,7 @@ void get_last_error() {
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
     printf("CP1: start\n");
     //INPUTS
@@ -53,6 +53,7 @@ int main() {
     curandState* d_curand_states, *d_states_grids;
     int* agent_count_grids = new int[N_STEPS * GRID_N * GRID_N];
     float* phi_grids = new float[N_STEPS * GRID_N * GRID_N];
+    int seed = SEED;
     try {
         cudaMalloc(&d_curand_states, WORM_COUNT * sizeof(curandState));
         cudaMalloc(&d_agents, WORM_COUNT * sizeof(Agent));
@@ -69,10 +70,15 @@ int main() {
         get_last_error();
         printf("loading joint distribution: %s\n", joint_distribution_file_name);
         //AGENTS
-        initialize_rng<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_curand_states, SEED);
+        //check if seed is provided as argument
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
+                seed = atoi(argv[++i]);
+        }
+        initialize_rng<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_curand_states, seed);
         get_last_error();
         cudaDeviceSynchronize();
-        initAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states, SEED,
+        initAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states, seed,
                                                                                WORM_COUNT);
         printf("Initializing agents\n");
         get_last_error();
@@ -102,6 +108,10 @@ int main() {
 
         dim3 gridSize((GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE, (GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE);
         dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
+        // host, allocated once before the timestep loop
+        float* d_dphi_log;
+        cudaMalloc(&d_dphi_log, (size_t)WORM_COUNT * N_STEPS * sizeof(float));
+
         for (int i = 0; i < N_STEPS; ++i) {
             //printf("step %d\n", i);
             //printf("logging:\n");
@@ -113,8 +123,7 @@ int main() {
             }
             //printf("moving\n");
             //MOVE AGENTS
-            moveAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,
-                                                                                   WORM_COUNT, i, d_params,
+            moveAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,WORM_COUNT, i, d_params,
                                                                                    agent_count_grid);
             get_last_error();
             cudaDeviceSynchronize();
@@ -142,7 +151,7 @@ int main() {
             //UPDATE STATES -- ~collective
             updateAgentStateCollective<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents,
                                                                                                    d_curand_states, i,
-                                                                                                   WORM_COUNT, d_params,pheromone_grid);
+                                                                                                   WORM_COUNT, d_params,pheromone_grid, d_dphi_log);
             get_last_error();
             cudaDeviceSynchronize();
 
@@ -155,7 +164,12 @@ int main() {
         //LOG GRIDS, this should be sensible as it's O(2000 * 100 * 100) ~ 20 000 000
         //perhaps a sparse implementation? (i,j):x IFF x>0
         log_matrices(agent_count_grids, phi_grids, agent_count_grid_log, pheromone_grid_log, true);
+        std::vector<float> h_dphi_log((size_t)WORM_COUNT * N_STEPS);
+        cudaMemcpy(h_dphi_log.data(), d_dphi_log, h_dphi_log.size() * sizeof(float), cudaMemcpyDeviceToHost);
 
+        FILE* f = fopen("/sim/dphi_log.bin", "wb");
+        fwrite(h_dphi_log.data(), sizeof(float), h_dphi_log.size(), f);
+        fclose(f);
     } catch (const std::exception& e) {
         fprintf(stderr, "Fatal error: %s\n", e.what());
         return 1;

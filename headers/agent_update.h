@@ -228,18 +228,26 @@ __global__ void updateAgentStateCollective(
         curandState* rng_states,
         int timestep,
         int worm_count, StateParams* params,
-        const float* phi_grid)
+        const float* phi_grid,
+        float* d_dphi_log)
 {
     int agent_id = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (agent_id >= worm_count)
         return;
+    if (timestep==0){
+        agents[agent_id].previous_phi = get_local_pheromone(agents[agent_id], phi_grid);
+    }
     float phi = get_local_pheromone(agents[agent_id], phi_grid);
-    if(agents[agent_id].state_duration>1 && agents[agent_id].state==2 ){//&& agents[agent_id].neighbor_count>0){ //only consider early exit for run state
+    //printf("phi: %f\n", phi);
+    float dphi = (phi - agents[agent_id].previous_phi) / DT;
+    agents[agent_id].previous_phi = phi;
+    d_dphi_log[(size_t)timestep * worm_count + agent_id] = dphi;
+    if(false && agents[agent_id].state_duration>1 && agents[agent_id].state==2 ){//&& agents[agent_id].neighbor_count>0){ //only consider early exit for run state
         TransitionModel exit_model = d_exit_models[agents[agent_id].state];
         //use exit model to determine if the agent should exit the state early -- it's a logistic function on the number of neighbors
         float z_exit =
-                exit_model.coeff * phi
+                exit_model.coeff * dphi
                 + exit_model.intercept;
 
         float p_exit =
@@ -279,7 +287,7 @@ __global__ void updateAgentStateCollective(
         const TransitionModel& model =
                 d_transition_models[agent_state * N_STATES + i];
 
-        if (model.coeff == -1 && model.intercept == -1)
+        if (true && model.coeff == -1 && model.intercept == -1)
         {
             p[i] = model.p_off_food;
             p_irr += p[i];
@@ -288,7 +296,7 @@ __global__ void updateAgentStateCollective(
         else
         {
             float z =
-                    model.coeff * phi
+                    model.coeff * dphi
                     + model.intercept;
 
             float height = model.height;
@@ -311,7 +319,7 @@ __global__ void updateAgentStateCollective(
             const TransitionModel& model =
                     d_transition_models[agent_state * N_STATES + i];
 
-            if (!(model.coeff==-1 && model.intercept==-1 ))// || agents[agent_id].neighbor_count>0)//|| fabsf(agents[agent_id].accumulated_dc_tot) < ODOR_THRESHOLD))
+            if (false && !(model.coeff==-1 && model.intercept==-1 ))// || agents[agent_id].neighbor_count>0)//|| fabsf(agents[agent_id].accumulated_dc_tot) < ODOR_THRESHOLD))
             {
                 p[i] = (p_r_raw[i] / sum_r) * remaining_mass;
             }

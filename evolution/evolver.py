@@ -41,7 +41,7 @@ EPS                = 1e-6
 # ─── Parameter scaling ────────────────────────────────────────────────────────
 
 COEFF_RANGE     = (-0.5, 0.5)
-INTERCEPT_RANGE = (-50.0, 50.0)
+INTERCEPT_RANGE = (-5.0, 5.0)
 HEIGHT_RANGE    = (0.0, 1.0)
 L1_HEIGHT_RANGE  = (0.0, 1.0)
 L2_HEIGHT_RANGE  = (0.0, 2.0)

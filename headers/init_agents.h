@@ -23,6 +23,7 @@ struct Agent {
     float run_omega = 0.0f;
     float run_amp = 0.0f;
     float run_bias;
+    float previous_phi;
 };
 
 // CUDA kernel to initialize the position of each agent

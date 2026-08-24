@@ -6,6 +6,21 @@ set -e
 IMAGE_NAME=cuda-agent-sim
 DOCKERFILE_PATH=.
 
+# === Parse args ===
+seed=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --seed)
+            seed="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            exit 1
+            ;;
+    esac
+done
+
 # Get the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$SCRIPT_DIR"
@@ -33,7 +48,7 @@ echo "Running container with GPU support..."
 docker run --rm --privileged --gpus all \
     -v "$STATE_ESTIMATIONS_HOST":"$STATE_ESTIMATIONS_CONTAINER" \
     -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \
-    "$IMAGE_NAME" "$seed"
+    "$IMAGE_NAME" --seed "$seed"
 #docker run --rm --privileged --gpus all \
 #    -v "$STATE_ESTIMATIONS_HOST":"$STATE_ESTIMATIONS_CONTAINER" \
 #    -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \
