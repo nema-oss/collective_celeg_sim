@@ -109,9 +109,9 @@ int main(int argc, char* argv[]) {
         dim3 gridSize((GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE, (GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE);
         dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
         // host, allocated once before the timestep loop
-        float* d_dphi_log;
+        /*float* d_dphi_log;
         cudaMalloc(&d_dphi_log, (size_t)WORM_COUNT * N_STEPS * sizeof(float));
-
+        */
         for (int i = 0; i < N_STEPS; ++i) {
             //printf("step %d\n", i);
             //printf("logging:\n");
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
             //UPDATE STATES -- ~collective
             updateAgentStateCollective<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents,
                                                                                                    d_curand_states, i,
-                                                                                                   WORM_COUNT, d_params,pheromone_grid, d_dphi_log);
+                                                                                                   WORM_COUNT, d_params,pheromone_grid);
             get_last_error();
             cudaDeviceSynchronize();
 
@@ -164,12 +164,12 @@ int main(int argc, char* argv[]) {
         //LOG GRIDS, this should be sensible as it's O(2000 * 100 * 100) ~ 20 000 000
         //perhaps a sparse implementation? (i,j):x IFF x>0
         log_matrices(agent_count_grids, phi_grids, agent_count_grid_log, pheromone_grid_log, true);
-        std::vector<float> h_dphi_log((size_t)WORM_COUNT * N_STEPS);
+        /*std::vector<float> h_dphi_log((size_t)WORM_COUNT * N_STEPS);
         cudaMemcpy(h_dphi_log.data(), d_dphi_log, h_dphi_log.size() * sizeof(float), cudaMemcpyDeviceToHost);
 
         FILE* f = fopen("/sim/dphi_log.bin", "wb");
         fwrite(h_dphi_log.data(), sizeof(float), h_dphi_log.size(), f);
-        fclose(f);
+        fclose(f);*/
     } catch (const std::exception& e) {
         fprintf(stderr, "Fatal error: %s\n", e.what());
         return 1;
