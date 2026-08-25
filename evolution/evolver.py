@@ -37,11 +37,12 @@ TRANSITIONS = [(0,0),(0,1),(0,2),(1,0),(1,1),(1,2),(2,0),(2,1),(2,2)]
 
 NEIGHBOR_RADIUS_MM = 0.5
 EPS                = 1e-6
+MAXITER = 200
 
 # ─── Parameter scaling ────────────────────────────────────────────────────────
 
-COEFF_RANGE     = (-0.5, 0.5)
-INTERCEPT_RANGE = (-5.0, 5.0)
+COEFF_RANGE     = (-0.027, 0.027)
+INTERCEPT_RANGE = (-2.5, 2.5)
 HEIGHT_RANGE    = (0.0, 1.0)
 L1_HEIGHT_RANGE  = (0.0, 1.0)
 L2_HEIGHT_RANGE  = (0.0, 2.0)
@@ -382,6 +383,7 @@ def evaluate_count_grid(x_norm: np.ndarray) -> dict:
     return {
         #"kurtosis": float(np.mean(ensemble_kurtosis)),
         "cluster_metric": float(np.mean(ensemble_cluster_metric)),
+        "cluster_metric_std" : float(np.std(ensemble_cluster_metric))
     }
 
 def fitness_aggregation(metrics: dict) -> float:
@@ -402,7 +404,7 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
         x0,
         0.6,            # sigma in normalized space — 0.5 is a quarter of [-1,1]
         {
-            "maxiter": 200,
+            "maxiter": MAXITER,
             "popsize": 14,  # 4 + floor(3 * ln(24))
             "verbose": 1,
             "tolx":    1e-6,
@@ -427,8 +429,8 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
             print(f"  [{label}] iter={iteration:03d} cand={i:02d} ...", end=" ", flush=True)
             try:
                 metrics = evaluate_count_grid(sol)
-                fit     = fitness_fn(metrics)
-                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f}  ")
+                fit   = fitness_fn(metrics)
+                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f} | std={ metrics["cluster_metric_std"]} ")
                      # f"kurtosis={metrics['kurtosis']:.3f}  ")
             except Exception as e:
                 fit = 1e6
