@@ -102,7 +102,7 @@ static void log_matrix_stack(const T* grids, const char* filename, bool write_bi
     bool use_sparse = sparse_timestep_count > N_STEPS / 2;
 
     std::string outname = build_filename(filename, use_sparse, write_bits);
-    printf("saving phi to %s\n", outname.c_str();
+    printf("saving phi to %s\n", outname.c_str());
     FILE* f = fopen(outname.c_str(), write_bits ? "wb" : "w");
     if (!f) {
         fprintf(stderr, "log_matrix_stack: failed to open %s\n", outname.c_str());
