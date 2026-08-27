@@ -187,10 +187,24 @@ __global__ void moveAgents(Agent* agents, curandState* local_state, int worm_cou
         agents[agent_id].x += dx;
         agents[agent_id].y += dy;
         //just keep them within the boundaries for now
-        if (agents[agent_id].x < 0) agents[agent_id].x = 0;
+        /*if (agents[agent_id].x < 0) agents[agent_id].x = 0;
         if (agents[agent_id].x >= WIDTH) agents[agent_id].x = WIDTH - 0.001f;
         if (agents[agent_id].y < 0) agents[agent_id].y = 0;
-        if (agents[agent_id].y >= HEIGHT) agents[agent_id].y = HEIGHT - 0.001f;
+        if (agents[agent_id].y >= HEIGHT) agents[agent_id].y = HEIGHT - 0.001f;*/ //bad idea -- worms get stuck there
+        // Reflect at boundaries
+        if (agents[agent_id].x < 0.0f) {
+            agents[agent_id].x = -agents[agent_id].x;
+        }
+        else if (agents[agent_id].x >= WIDTH) {
+            agents[agent_id].x = 2.0f * WIDTH - agents[agent_id].x;
+        }
+
+        if (agents[agent_id].y < 0.0f) {
+            agents[agent_id].y = -agents[agent_id].y;
+        }
+        else if (agents[agent_id].y >= HEIGHT) {
+            agents[agent_id].y = 2.0f * HEIGHT - agents[agent_id].y;
+        }
 
         int agent_new_i =  (int)(agents[agent_id].x / dx_grid);
         int agent_new_j =  (int)(agents[agent_id].y / dy_grid);
