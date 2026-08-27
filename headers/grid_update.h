@@ -89,7 +89,7 @@ __global__ void updateGrid(float* phi_grid, int* count_grid, float* new_phi_grid
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     if (i < GRID_N && j < GRID_N) {
-        float laplacian_value = zero_flux_laplacian(phi_grid, i, j);
+        float laplacian_value = laplacian(phi_grid, i, j);
         float dx = WIDTH  / (float)GRID_N;
         float dy = HEIGHT / (float)GRID_N;
         float rho = (float)count_grid[i * GRID_N + j] / (dx * dy);
