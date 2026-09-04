@@ -40,7 +40,7 @@ else
 fi
 echo "Building Docker image: $IMAGE_NAME"
 DOCKER_BUILDKIT=1 docker build --pull=false -t cuda-agent-sim .
-
+#DOCKER_BUILDKIT=1 docker build --no-cache --pull=false -t cuda-agent-sim .
 # Remove dangling images after every build
 docker image prune -f
 
@@ -54,4 +54,15 @@ docker run --rm --privileged --gpus all \
 #    -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \
 #    -it --entrypoint /bin/bash \
 #    "$IMAGE_NAME"
+
+#docker run --rm --privileged --gpus all \
+#    -v "$STATE_ESTIMATIONS_HOST":"$STATE_ESTIMATIONS_CONTAINER" \
+#    -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \
+#    --entrypoint compute-sanitizer \
+#    "$IMAGE_NAME" \
+#    --tool memcheck \
+#    --leak-check full \
+#    --show-backtrace yes \
+#    /app/build/untitled2 --seed "$seed"
+
 echo "Exit code: $?"

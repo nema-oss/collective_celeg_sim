@@ -243,14 +243,15 @@ from scipy.ndimage import label
 # --- loaded once, at module import time ---
 _SIM_PARAMS = json.loads((Path(SIM_OUTPUT_DIR) / "simulation_parameters.json").read_text())
 WORM_COUNT = _SIM_PARAMS["WORM_COUNT"]
+print(f"WORM COUNT: {WORM_COUNT}")
 GRID_N = _SIM_PARAMS["GRID_N"]
 N_STEPS = _SIM_PARAMS["N_STEPS"]
 
 
 def resolve_count_grid_path(sim_output_dir: Path) -> Path:
     """log_matrices picks dense vs sparse at runtime and encodes it in the filename."""
-    dense = sim_output_dir / "agent_count_grid_b.dat"
-    sparse = sim_output_dir / "agent_count_grid_sparse_b.dat"
+    dense = sim_output_dir / "agent_count_grid.dat"
+    sparse = sim_output_dir / "agent_count_grid_sparse.dat"
     if sparse.exists():
         return sparse
     if dense.exists():
@@ -263,7 +264,7 @@ def resolve_count_grid_path(sim_output_dir: Path) -> Path:
 def clear_old_count_grids(sim_output_dir: Path) -> None:
     """Delete stale outputs before a run so a leftover file from a prior sparsity outcome
     can't get picked up by resolve_count_grid_path."""
-    for name in ("agent_count_grid_b.dat", "agent_count_grid_sparse_b.dat"):
+    for name in ("agent_count_grid.dat", "agent_count_grid_sparse.dat"):
         p = sim_output_dir / name
         if p.exists():
             p.unlink()
@@ -280,7 +281,7 @@ def load_count_grid(path: Path) -> np.ndarray:
         n_steps, grid_n = np.fromfile(f, dtype=np.int32, count=2)
 
         if not is_sparse:
-            expected = n_steps * grid_n * grid_n
+            expected = int(n_steps) * int(grid_n) * int(grid_n)
             flat = np.fromfile(f, dtype=np.int32, count=expected)
             if flat.size != expected:
                 raise ValueError(f"{path}: expected {expected} ints, got {flat.size}")
@@ -347,6 +348,149 @@ def cluster_metric_per_frame(
 
     return metrics
 
+def _union_find_roots(parent):
+    """Path-compress every element in `parent` down to its root, in place-ish,
+    and return an array mapping label -> root label."""
+    for i in range(len(parent)):
+        root = i
+        while parent[root] != root:
+            root = parent[root]
+        # path compression
+        while parent[i] != root:
+            parent[i], i = root, parent[i]
+    return parent
+
+
+def _union(parent, rank, a, b):
+    ra, rb = a, b
+    while parent[ra] != ra:
+        ra = parent[ra]
+    while parent[rb] != rb:
+        rb = parent[rb]
+    if ra == rb:
+        return
+    if rank[ra] < rank[rb]:
+        ra, rb = rb, ra
+    parent[rb] = ra
+    if rank[ra] == rank[rb]:
+        rank[ra] += 1
+
+
+def cluster_metric_per_frame_periodic(
+        grids: np.ndarray,
+        worm_count: int,
+        min_cluster_size: int = 4
+) -> np.ndarray:
+
+    n_steps, H, W = grids.shape
+    metrics = np.zeros(n_steps, dtype=np.float64)
+
+    structure_8 = np.ones((3, 3), dtype=np.int8)
+
+    for t in range(n_steps):
+        grid = grids[t]
+        occupied = grid > 0
+
+        labeled, n_clusters = label(occupied, structure=structure_8)
+
+        if n_clusters == 0:
+            continue
+
+        cluster_sums = np.bincount(
+            labeled.ravel(), weights=grid.ravel(), minlength=n_clusters + 1
+        )
+        cluster_sizes = np.bincount(labeled.ravel(), minlength=n_clusters + 1)
+
+        # --- stitch clusters across periodic boundaries ---
+        parent = np.arange(n_clusters + 1)
+        rank = np.zeros(n_clusters + 1, dtype=np.int64)
+
+        # vertical seam: row 0 <-> row H-1 (straight + both diagonals)
+        row_top = labeled[0, :]
+        row_bot = labeled[H - 1, :]
+        for j in range(W):
+            a = row_top[j]
+            if a == 0:
+                continue
+            for dj in (-1, 0, 1):
+                b = row_bot[(j + dj) % W]
+                if b != 0:
+                    _union(parent, rank, a, b)
+
+        # horizontal seam: col 0 <-> col W-1 (straight + both diagonals)
+        col_left = labeled[:, 0]
+        col_right = labeled[:, W - 1]
+        for i in range(H):
+            a = col_left[i]
+            if a == 0:
+                continue
+            for di in (-1, 0, 1):
+                b = col_right[(i + di) % H]
+                if b != 0:
+                    _union(parent, rank, a, b)
+
+        roots = _union_find_roots(parent)  # label -> root label
+
+        merged_sums = np.zeros(n_clusters + 1, dtype=np.float64)
+        merged_sizes = np.zeros(n_clusters + 1, dtype=np.int64)
+        np.add.at(merged_sums, roots, cluster_sums)
+        np.add.at(merged_sizes, roots, cluster_sizes)
+
+        valid = merged_sizes >= min_cluster_size
+        valid[0] = False  # root 0 is background (root[0] == 0 always)
+
+        if not valid.any():
+            continue
+
+        metrics[t] = merged_sums[valid].max() / worm_count
+
+    return metrics
+
+def cluster_metric_per_frame_combined(
+        grids: np.ndarray,
+        worm_count: int,
+        min_cluster_size: int = 4
+) -> np.ndarray:
+
+    n_steps = grids.shape[0]
+    metrics = np.zeros(n_steps, dtype=np.float64)
+
+    structure_8 = np.ones((3, 3), dtype=np.int8)
+
+    for t in range(n_steps):
+        grid = grids[t]
+        occupied = grid > 0
+
+        labeled, n_clusters = label(occupied, structure=structure_8)
+
+        if n_clusters == 0:
+            continue
+
+        cluster_sums = np.bincount(
+            labeled.ravel(),
+            weights=grid.ravel(),
+            minlength=n_clusters + 1
+        )
+        cluster_sizes = np.bincount(
+            labeled.ravel(),
+            minlength=n_clusters + 1
+        )
+
+        valid = cluster_sizes >= min_cluster_size
+        valid[0] = False
+
+        if not valid.any():
+            continue
+
+        # fraction of the population that is inside a qualifying cluster
+        frac_worms_in_clusters = cluster_sums[valid].sum() / worm_count
+
+        # mean size of the qualifying clusters
+        mean_cluster_size = cluster_sizes[valid].mean()
+
+        metrics[t] = frac_worms_in_clusters * mean_cluster_size
+
+    return metrics
 
 def evaluate_count_grid(x_norm: np.ndarray) -> dict:
     """
@@ -370,15 +514,14 @@ def evaluate_count_grid(x_norm: np.ndarray) -> dict:
         grid_path = resolve_count_grid_path(sim_output_dir)
         grids = load_count_grid(grid_path)  # (n_steps, grid_n, grid_n)
 
-        # time-averaged kurtosis: kurtosis of the per-cell count distribution at each
-        # timestep, averaged over all timesteps
-        #flat_per_t = grids.reshape(grids.shape[0], -1)  # (n_steps, grid_n*grid_n)
-        #kurt_per_t = kurtosis(flat_per_t, axis=1, fisher=True)
-        #ensemble_kurtosis.append(np.mean(kurt_per_t))
+        # only look at the second half of the run, every 5th frame
+        n_steps = grids.shape[0]
+        start = n_steps // 2
+        grids_subset = grids[start::5]
 
-        # time-averaged cluster metric
-        cluster_per_t = cluster_metric_per_frame(grids, WORM_COUNT)
+        cluster_per_t = cluster_metric_per_frame(grids_subset, WORM_COUNT)
         ensemble_cluster_metric.append(np.mean(cluster_per_t))
+
 
     return {
         #"kurtosis": float(np.mean(ensemble_kurtosis)),
@@ -397,15 +540,24 @@ def fitness_diffusion(metrics: dict) -> float:
     return metrics["cluster_metric"]
 # ─── CMA-ES ───────────────────────────────────────────────────────────────────
 
+import time
+
+def _fmt_hms(seconds: float) -> str:
+    seconds = int(seconds)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
 def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
     x0 = np.zeros(len(PARAM_RANGES))
     n_params = len(PARAM_RANGES)
     es = cma.CMAEvolutionStrategy(
         x0,
-        0.6,            # sigma in normalized space — 0.5 is a quarter of [-1,1]
+        0.6,
         {
             "maxiter": MAXITER,
-            "popsize": 14,  # 4 + floor(3 * ln(24))
+            "popsize": 14,
             "verbose": 1,
             "tolx":    1e-6,
             "tolfun":  1e-6,
@@ -421,20 +573,39 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
     best_fitness = np.inf
     iteration = 0
 
+    # timing / progress tracking
+    popsize = es.popsize
+    total_candidates_est = popsize * MAXITER   # upper bound; real run may stop earlier
+    run_start = time.time()
+    n_evaluated = 0
+    total_eval_time = 0.0
+
     while not es.stop():
         solutions = es.ask()
         fitnesses = []
 
         for i, sol in enumerate(solutions):
             print(f"  [{label}] iter={iteration:03d} cand={i:02d} ...", end=" ", flush=True)
+            t0 = time.time()
             try:
                 metrics = evaluate_count_grid(sol)
                 fit   = fitness_fn(metrics)
-                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f} | std={ metrics["cluster_metric_std"]} ")
-                     # f"kurtosis={metrics['kurtosis']:.3f}  ")
+                print(f"fit={fit:.4f}  cluster metric={metrics['cluster_metric']:.3f} | std={metrics['cluster_metric_std']} ")
             except Exception as e:
                 fit = 1e6
                 print(f"ERROR ({e})")
+            t1 = time.time()
+
+            n_evaluated += 1
+            total_eval_time += (t1 - t0)
+            avg_eval_time = total_eval_time / n_evaluated
+
+            if n_evaluated == 1:
+                # first-sample projection, exactly what was asked for
+                est_total = avg_eval_time * total_candidates_est
+                print(f"  [{label}] first evaluation took {t1 - t0:.1f}s "
+                      f"→ rough total estimate: {_fmt_hms(est_total)} "
+                      f"({total_candidates_est} candidate evals @ popsize={popsize}, maxiter={MAXITER})")
 
             fitnesses.append(fit)
 
@@ -444,33 +615,19 @@ def run_cmaes(fitness_fn, label: str) -> tuple[np.ndarray, float]:
 
         es.tell(solutions, fitnesses)
         best_idx = int(np.argmin(fitnesses))
+
+        elapsed = time.time() - run_start
+        remaining_candidates = total_candidates_est - n_evaluated
+        eta = avg_eval_time * remaining_candidates
+        pct = 100.0 * n_evaluated / total_candidates_est
+
         print(f"\n  [{label}] iter={iteration:03d} summary | "
               f"best_fit={fitnesses[best_idx]:.4f} | "
               f"mean_fit={np.mean(fitnesses):.4f} | "
               f"sigma={es.sigma:.4f}")
-
-        if iteration % LOG_EVERY == 0:
-            # re-evaluate best candidate of this iteration to get the full fractions
-            best_sol = solutions[best_idx]
-            params   = denormalize(best_sol)
-            write_l1(params)
-            write_l2(params)
-            run_simulator(seed=0)  # fixed seed for logging
-
-            #path = os.path.join(SIM_OUTPUT_DIR, "agent_data.json")
-            #with open(path) as f:
-            #    data = json.load(f)
-            #pos       = np.array(data["positions"])
-            #fractions = compute_largest_cluster_fractions(pos)
-
-            log_path = os.path.join(LOG_DIR, f"{label}_iter{iteration:04d}_cluster_fractions.json")
-            with open(log_path, "w") as f:
-                json.dump({
-                    "iteration":  iteration,
-                    "fitness":    fitnesses[best_idx],
-                    #"fractions":  fractions.tolist(),   # one value per timestep
-                }, f, indent=2)
-            print(f"  [LOG] Saved cluster fractions → {log_path}")
+        print(f"  [{label}] progress ~{pct:5.1f}% | elapsed={_fmt_hms(elapsed)} | "
+              f"avg/eval={avg_eval_time:.1f}s | est. remaining={_fmt_hms(eta)} "
+              f"(assumes maxiter reached; may stop earlier)")
 
         iteration += 1
     print(f"  [{label}] Stopped because: {es.stop()}")

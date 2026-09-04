@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
     printf("CP1: start\n");
     //INPUTS
-    const char* joint_distribution_file_name = "/state_estimations/joint_distributions_off_food.json";
+    const char* joint_distribution_file_name = "/state_estimations/joint_distributions.json";
     const char *exit_params_filename = "/state_estimations/l1.json";
     const char *transition_params_filename = "/state_estimations/l2.json";
     const char *extracted_params_filename = "/state_estimations/behavior_distributions_off_food.json";
@@ -40,10 +40,19 @@ int main(int argc, char* argv[]) {
     const char *pheromone_grid_log = "/sim/pheromone_grid.dat";
     const char *param_log = "/sim/simulation_parameters.json";
 
-    auto* positions = new float[WORM_COUNT * N_STEPS * 2]; // Matrix to store positions (x, y) for each agent at each timestep
-    auto* states = new int[WORM_COUNT * N_STEPS]; // Matrix to store the state for each agent at each timestep
+    //auto* positions = new float[WORM_COUNT * N_STEPS * 2]; // Matrix to store positions (x, y) for each agent at each timestep
+    //auto* states = new int[WORM_COUNT * N_STEPS]; // Matrix to store the state for each agent at each timestep
     int* agent_count_grid, *h_agent_count_grid = new int[GRID_N * GRID_N];
     float* pheromone_grid, *h_pheromone_grid = new float[GRID_N * GRID_N], *new_pheromone;
+
+    float* h_positions_step = new float[WORM_COUNT * 2];
+    int*   h_states_step    = new int[WORM_COUNT];
+
+    FILE* f_positions  = open_agent_stream("/sim/positions_b.dat", N_STEPS, WORM_COUNT);
+    FILE* f_states     = open_agent_stream("/sim/states_b.dat",    N_STEPS, WORM_COUNT);
+    FILE* f_agent_grid = open_grid_stream(agent_count_grid_log, N_STEPS, GRID_N);
+    FILE* f_phi_grid   = open_grid_stream(pheromone_grid_log,   N_STEPS, GRID_N);
+
     StateParams* d_params = nullptr;
     DurationDistributionHost *h_states = new DurationDistributionHost[N_STATES];
     size_t size = WORM_COUNT * sizeof(Agent);
@@ -51,8 +60,8 @@ int main(int argc, char* argv[]) {
     TransitionModelHost* h_exit = new TransitionModelHost[N_STATES];
     TransitionModelHost* h_transitions = new TransitionModelHost[N_STATES*N_STATES];
     curandState* d_curand_states, *d_states_grids;
-    int* agent_count_grids = new int[N_STEPS * GRID_N * GRID_N];
-    float* phi_grids = new float[N_STEPS * GRID_N * GRID_N];
+    //int* agent_count_grids = new int[N_STEPS * GRID_N * GRID_N];
+    //float* phi_grids = new float[N_STEPS * GRID_N * GRID_N];
     int seed = SEED;
     try {
         cudaMalloc(&d_curand_states, WORM_COUNT * sizeof(curandState));
@@ -63,6 +72,7 @@ int main(int argc, char* argv[]) {
         upload_duration_distributions(h_states);
         cudaDeviceSynchronize();
         get_last_error();
+
         //-joint speed angle change
         printf("loading distributions:\n");
         load_distributions(joint_distribution_file_name, N_STATES, &d_params);
@@ -117,20 +127,32 @@ int main(int argc, char* argv[]) {
             //printf("logging:\n");
             //LOG POSITIONS AND STATES
             for (int j = 0; j < WORM_COUNT; ++j) {
-                positions[(i * WORM_COUNT + j) * 2] = h_agents[j].x;
-                positions[(i * WORM_COUNT + j) * 2 + 1] = h_agents[j].y;
-                states[i * WORM_COUNT + j] = h_agents[j].state;
+                h_positions_step[j * 2]     = h_agents[j].x;
+                h_positions_step[j * 2 + 1] = h_agents[j].y;
+                h_states_step[j]            = h_agents[j].state;
             }
+            fwrite(h_positions_step, sizeof(float), WORM_COUNT * 2, f_positions);
+            fwrite(h_states_step,    sizeof(int),   WORM_COUNT,     f_states);
             //printf("moving\n");
             //MOVE AGENTS
             moveAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,WORM_COUNT, i, d_params,
                                                                                    agent_count_grid);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                fprintf(stderr, "moveAgents failed at step %d: %s\n", i, cudaGetErrorString(err));
+                return 1;
+            }
             get_last_error();
             cudaDeviceSynchronize();
             cudaMemcpy(h_agents, d_agents, size, cudaMemcpyDeviceToHost);
             //PHEROMONE UPDATE
             //printf("updating grids\n");
             updateGrid<<<gridSize, blockSize>>>(pheromone_grid, agent_count_grid, new_pheromone);
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                fprintf(stderr, "Update grid failed at step %d: %s\n", i, cudaGetErrorString(err));
+                return 1;
+            }
             get_last_error();
             cudaDeviceSynchronize();
             //printf("swapping grids\n");
@@ -141,17 +163,24 @@ int main(int argc, char* argv[]) {
             cudaMemcpy(h_pheromone_grid, pheromone_grid, GRID_N * GRID_N * sizeof(float), cudaMemcpyDeviceToHost);
 
             //LOG PHEROMONE AND COUNT GRIDS
-            for (int j = 0; j < GRID_N; j++) {
+            /*for (int j = 0; j < GRID_N; j++) {
                 for (int k = 0; k < GRID_N; k++) {
                     agent_count_grids[(i * GRID_N + j) * GRID_N + k] = h_agent_count_grid[j * GRID_N + k];
                     phi_grids[(i * GRID_N + j) * GRID_N + k] = h_pheromone_grid[j * GRID_N + k];
                 }
-            }
+            }*/
+            write_grid_step(f_agent_grid, h_agent_count_grid, GRID_N);
+            write_grid_step(f_phi_grid,   h_pheromone_grid,   GRID_N);
 
             //UPDATE STATES -- ~collective
             updateAgentStateCollective<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents,
                                                                                                    d_curand_states, i,
                                                                                                    WORM_COUNT, d_params,pheromone_grid);
+            err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                fprintf(stderr, "updateAgent failed at step %d: %s\n", i, cudaGetErrorString(err));
+                return 1;
+            }
             get_last_error();
             cudaDeviceSynchronize();
 
@@ -159,17 +188,23 @@ int main(int argc, char* argv[]) {
 
         //FINAL LOG WITH POSITIONS AND STATES
         printf("logging\n");
-        saveAllDataToJSON(agent_log, positions, states);
+        //saveAllDataToJSON(agent_log, positions, states);
         saveSimulationParameters(param_log);
         //LOG GRIDS, this should be sensible as it's O(2000 * 100 * 100) ~ 20 000 000
         //perhaps a sparse implementation? (i,j):x IFF x>0
-        log_matrices(agent_count_grids, phi_grids, agent_count_grid_log, pheromone_grid_log, true);
+        //log_matrices(agent_count_grids, phi_grids, agent_count_grid_log, pheromone_grid_log, true);
         /*std::vector<float> h_dphi_log((size_t)WORM_COUNT * N_STEPS);
         cudaMemcpy(h_dphi_log.data(), d_dphi_log, h_dphi_log.size() * sizeof(float), cudaMemcpyDeviceToHost);
 
         FILE* f = fopen("/sim/dphi_log.bin", "wb");
         fwrite(h_dphi_log.data(), sizeof(float), h_dphi_log.size(), f);
         fclose(f);*/
+        fclose(f_positions);
+        fclose(f_states);
+        fclose(f_agent_grid);
+        fclose(f_phi_grid);
+        delete[] h_positions_step;
+        delete[] h_states_step;
     } catch (const std::exception& e) {
         fprintf(stderr, "Fatal error: %s\n", e.what());
         return 1;
@@ -177,14 +212,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Fatal error: unknown exception (non-std::exception type)\n");
         return 1;
     }
-    return 0;
 
-    free(positions);
-    free(agent_count_grid);
-    free(h_agent_count_grid);
-    delete[] positions;
-    delete[] states;
-    delete[] agent_count_grids;
-    delete[] phi_grids;
     return 0;
 }

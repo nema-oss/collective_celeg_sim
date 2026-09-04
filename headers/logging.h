@@ -8,6 +8,35 @@
 #include "parameters.h"
 
 using json = nlohmann::json;
+
+// --- Streaming binary writer helpers -----------------------------------
+
+FILE* open_grid_stream(const char* filename, int n_steps, int grid_n) {
+    FILE* f = fopen(filename, "wb");
+    if (!f) throw std::runtime_error(std::string("Cannot open ") + filename);
+    setvbuf(f, NULL, _IOFBF, 1 << 20); // 1MB buffer, same as log_matrix_stack
+    int32_t ns = n_steps, gn = grid_n;
+    fwrite(&ns, sizeof(int32_t), 1, f);
+    fwrite(&gn, sizeof(int32_t), 1, f);
+    return f;
+}
+
+template <typename T>
+void write_grid_step(FILE* f, const T* grid, int grid_n) {
+    fwrite(grid, sizeof(T), (size_t)grid_n * grid_n, f);
+}
+
+FILE* open_agent_stream(const char* filename, int n_steps, int worm_count) {
+    FILE* f = fopen(filename, "wb");
+    if (!f) throw std::runtime_error(std::string("Cannot open ") + filename);
+    setvbuf(f, NULL, _IOFBF, 1 << 20);
+    int32_t ns = n_steps, wc = worm_count;
+    fwrite(&ns, sizeof(int32_t), 1, f);
+    fwrite(&wc, sizeof(int32_t), 1, f);
+    return f;
+}
+
+
 void saveAllDataToJSON(const char* filename, float* positions, int* sub_states) {
     nlohmann::json json_data;
     json_data["positions"] = nlohmann::json::array();

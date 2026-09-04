@@ -9,6 +9,7 @@
 #include <random>
 #include <limits>
 #include <cmath>
+#include <stdio.h>
 
 __device__ inline float sign(float x)
 {
@@ -37,13 +38,46 @@ __device__ int select_next_state(
 }
 
 // ---- Alias draw from a JointTable ------------------------------------
-__device__ void alias_draw(const JointTable* table, curandState* rng,
-                           float* out_speed, float* out_angle) {
-    int   i = (int)(curand_uniform(rng) * table->n);   // uniform bin
-    float u =       curand_uniform(rng);
-    int   idx = (u < table->prob[i]) ? i : table->alias[i];
-    *out_speed = table->obs[idx * 2];
-    *out_angle = table->obs[idx * 2 + 1];
+__device__ void alias_draw(
+        const JointTable* table,
+        curandState* rng,
+        float* out_speed,
+        float* out_angle
+) {
+    assert(table != nullptr);
+    assert(table->n > 0);
+
+    float r = curand_uniform(rng);
+    int i = (int)(r * table->n);
+
+    // Protect against the upper endpoint.
+    if (i >= table->n)
+        i = table->n - 1;
+
+    assert(i >= 0 && i < table->n);
+
+    float u = curand_uniform(rng);
+
+    int idx = (u < table->prob[i])
+              ? i
+              : table->alias[i];
+
+    assert(idx >= 0 && idx < table->n);
+
+    float speed = table->obs[idx * 2];
+    float angle = table->obs[idx * 2 + 1];
+
+    /*if (speed == 0.0f) {
+        printf("ZERO SPEED: n=%d i=%d idx=%d prob=%f alias=%d\n",
+               table->n,
+               i,
+               idx,
+               table->prob[i],
+               table->alias[i]);
+    }*/
+
+    *out_speed = speed;
+    *out_angle = angle;
 }
 
 // ---- Interpolated draw (point iv) ------------------------------------
@@ -51,6 +85,7 @@ __device__ void draw_speed_angle(const StateParams* sp, int t_star,
                                  curandState* rng,
                                  float* out_speed, float* out_angle) {
     // Binary search for t0, t1 bracketing t_star
+    assert(sp->n_durations > 0);
     int lo = 0, hi = sp->n_durations - 1;
 
     // exact match
@@ -125,7 +160,7 @@ __global__ void moveAgents(Agent* agents, curandState* local_state, int worm_cou
     if (agent_id<worm_count) {
 
         int agent_state = agents[agent_id].state;
-
+        assert(agent_state >= 0 && agent_state < N_STATES);
         StateParams* sp = &params[agent_state];
         float speed, angle_change;
         curandState local_rng = local_state[agent_id];
@@ -177,13 +212,20 @@ __global__ void moveAgents(Agent* agents, curandState* local_state, int worm_cou
                 }
             }
         }
-
-        speed *= fmaxf(0.0f, 1.0f - SLOWDOWN_FACTOR * n_neighbours);
+        //printf("n_neighbors: %d\n", n_neighbours);
+        speed *= fmaxf(0.1f, 1.0f - SLOWDOWN_FACTOR * n_neighbours);
+        //float factor = fmaxf(0.1f, 1.0f - SLOWDOWN_FACTOR * n_neighbours);
+        //printf("factor: %f\n", factor);
         //find dx and dy
         float dx = speed * cosf(new_angle) * DT;
         float dy = speed * sinf(new_angle) * DT;
         int agent_old_i =  (int)(agents[agent_id].x / dx_grid);
         int agent_old_j =  (int)(agents[agent_id].y / dy_grid);
+        // float rounding can push x/dx_grid to exactly GRID_N even though x < WIDTH
+        if (agent_old_i >= GRID_N) agent_old_i = GRID_N - 1;
+        if (agent_old_i < 0) agent_old_i = 0;
+        if (agent_old_j >= GRID_N) agent_old_j = GRID_N - 1;
+        if (agent_old_j < 0) agent_old_j = 0;
         agents[agent_id].x += dx;
         agents[agent_id].y += dy;
         //just keep them within the boundaries for now
@@ -191,19 +233,46 @@ __global__ void moveAgents(Agent* agents, curandState* local_state, int worm_cou
         if (agents[agent_id].x >= WIDTH) agents[agent_id].x = WIDTH - 0.001f;
         if (agents[agent_id].y < 0) agents[agent_id].y = 0;
         if (agents[agent_id].y >= HEIGHT) agents[agent_id].y = HEIGHT - 0.001f;*/ //bad idea -- worms get stuck there
-        // Periodic boundary conditions
-        if (agents[agent_id].x < 0.0f)
-            agents[agent_id].x += WIDTH;
-        else if (agents[agent_id].x >= WIDTH)
-            agents[agent_id].x -= WIDTH;
 
-        if (agents[agent_id].y < 0.0f)
-            agents[agent_id].y += HEIGHT;
-        else if (agents[agent_id].y >= HEIGHT)
-            agents[agent_id].y -= HEIGHT;
+        // Reflect at boundaries
+        if(BOUNDARY_TYPE==1) {
+            if (agents[agent_id].x < 0.0f) {
+                agents[agent_id].x = -agents[agent_id].x;
+            } else if (agents[agent_id].x >= WIDTH) {
+                agents[agent_id].x = 2.0f * WIDTH - agents[agent_id].x;
+            }
+
+            if (agents[agent_id].y < 0.0f) {
+                agents[agent_id].y = -agents[agent_id].y;
+            } else if (agents[agent_id].y >= HEIGHT) {
+                agents[agent_id].y = 2.0f * HEIGHT - agents[agent_id].y;
+            }
+        }
+        else {
+
+            // Periodic boundary conditions
+            if (agents[agent_id].x < 0.0f)
+                agents[agent_id].x += WIDTH;
+            else if (agents[agent_id].x >= WIDTH)
+                agents[agent_id].x -= WIDTH;
+
+            if (agents[agent_id].y < 0.0f)
+                agents[agent_id].y += HEIGHT;
+            else if (agents[agent_id].y >= HEIGHT)
+                agents[agent_id].y -= HEIGHT;
+
+        }
+        assert(isfinite(agents[agent_id].x) && isfinite(agents[agent_id].y));
 
         int agent_new_i =  (int)(agents[agent_id].x / dx_grid);
         int agent_new_j =  (int)(agents[agent_id].y / dy_grid);
+        // float rounding can push x/dx_grid to exactly GRID_N even though x < WIDTH
+        if (agent_new_i >= GRID_N) agent_new_i = GRID_N - 1;
+        if (agent_new_i < 0) agent_new_i = 0;
+        if (agent_new_j >= GRID_N) agent_new_j = GRID_N - 1;
+        if (agent_new_j < 0) agent_new_j = 0;
+        assert(agent_new_i >= 0 && agent_new_i < GRID_N);
+        assert(agent_new_j >= 0 && agent_new_j < GRID_N);
         if(agent_old_i!=agent_new_i || agent_old_j!=agent_new_j){
             //atomic add to grid
             atomicAdd(&agent_count_grid[agent_old_i * GRID_N + agent_old_j], -1);
@@ -250,6 +319,7 @@ __global__ void updateAgentStateCollective(
     float phi = get_local_pheromone(agents[agent_id], phi_grid);
     //printf("phi: %f\n", phi);
     float dphi = (phi - agents[agent_id].previous_phi) / DT;
+    dphi = 0.0f;
     agents[agent_id].previous_phi = phi;
     if(agents[agent_id].state_duration>1 && agents[agent_id].state==2 ){//&& agents[agent_id].neighbor_count>0){ //only consider early exit for run state
         TransitionModel exit_model = d_exit_models[agents[agent_id].state];

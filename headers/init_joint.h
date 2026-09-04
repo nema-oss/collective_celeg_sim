@@ -143,6 +143,8 @@ static void load_joint(const char* path, std::vector<StateParamsHost>& host_para
             std::string d_key = std::to_string(dur_keys[i]);
             const json& entry = dur_map[d_key];
             int n = entry["n"].get<int>();
+            int actual_obs = entry["obs"].size();
+
 
             // obs: array of [speed, angle] pairs → flatten to float*
             sp.obs_data[i].reserve(n * 2);
@@ -164,11 +166,52 @@ static void load_joint(const char* path, std::vector<StateParamsHost>& host_para
 
             sp.prob_data[i]  = entry["prob"].get<std::vector<float>>();
             sp.alias_data[i] = entry["alias"].get<std::vector<int>>();
+            if ((int)sp.obs_data[i].size() != 2 * n) {
+                throw std::runtime_error(
+                        "obs size mismatch for state " +
+                        std::to_string(state) +
+                        ", duration " +
+                        std::to_string(dur_keys[i])
+                );
+            }
 
+            if ((int)sp.prob_data[i].size() != n) {
+                throw std::runtime_error(
+                        "prob size mismatch for state " +
+                        std::to_string(state) +
+                        ", duration " +
+                        std::to_string(dur_keys[i])
+                );
+            }
+
+            if ((int)sp.alias_data[i].size() != n) {
+                throw std::runtime_error(
+                        "alias size mismatch for state " +
+                        std::to_string(state) +
+                        ", duration " +
+                        std::to_string(dur_keys[i])
+                );
+            }
+
+            for (int k : sp.alias_data[i]) {
+                if (k < 0 || k >= n) {
+                    throw std::runtime_error(
+                            "INVALID ALIAS INDEX: state=" +
+                            std::to_string(state) +
+                            " duration=" +
+                            std::to_string(dur_keys[i]) +
+                            " n=" +
+                            std::to_string(n) +
+                            " alias=" +
+                            std::to_string(k)
+                    );
+                }
+            }
             sp.tables[i].n     = n;
             sp.tables[i].obs   = nullptr;  // filled in upload step
             sp.tables[i].prob  = nullptr;
             sp.tables[i].alias = nullptr;
+
         }
     }
     printf("\nSpeed observations:\n");
@@ -189,6 +232,17 @@ static void upload_state(const StateParamsHost& sp, StateParams& out_d) {
     std::vector<JointTable> tables_with_dptrs(sp.n_durations);
     for (int i = 0; i < sp.n_durations; ++i) {
         tables_with_dptrs[i].n     = sp.tables[i].n;
+        printf("state table %d: n=%d\n", i, sp.tables[i].n);
+
+        for (int k = 0; k < sp.tables[i].n; ++k) {
+            if (sp.obs_data[i][2*k] == 0.0f) {
+                printf("HOST ZERO: table=%d k=%d speed=%f angle=%f\n",
+                       i,
+                       k,
+                       sp.obs_data[i][2*k],
+                       sp.obs_data[i][2*k+1]);
+            }
+        }
         tables_with_dptrs[i].obs   = device_alloc_copy(sp.obs_data[i]);
         tables_with_dptrs[i].prob  = device_alloc_copy(sp.prob_data[i]);
         tables_with_dptrs[i].alias = device_alloc_copy(sp.alias_data[i]);
