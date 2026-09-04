@@ -25,5 +25,5 @@ std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
 // 0.264 < 1/2
 #define SLOWDOWN_FACTOR 0.01f
 #define MAX_CONCENTRATION 30000000000.0f
-#define BOUNDARY_TYPE 1 //or "PERIODIC":0,"WALL":1
+#define BOUNDARY_TYPE 0 //or "PERIODIC":0,"WALL":1
 #endif //UNTITLED2_PARAMETERS_H
