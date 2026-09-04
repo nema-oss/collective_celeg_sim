@@ -319,7 +319,7 @@ __global__ void updateAgentStateCollective(
     float phi = get_local_pheromone(agents[agent_id], phi_grid);
     //printf("phi: %f\n", phi);
     float dphi = (phi - agents[agent_id].previous_phi) / DT;
-    dphi = 0.0f;
+    //dphi = 0.0f;
     agents[agent_id].previous_phi = phi;
     if(agents[agent_id].state_duration>1 && agents[agent_id].state==2 ){//&& agents[agent_id].neighbor_count>0){ //only consider early exit for run state
         TransitionModel exit_model = d_exit_models[agents[agent_id].state];
