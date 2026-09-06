@@ -6,11 +6,11 @@
 #define UNTITLED2_PARAMETERS_H
 #define N_STATES 3
 #define WORM_COUNT 1000
-#define WIDTH 10 //10mm
-#define HEIGHT 10  //10mm
-#define GRID_N 100 //dx = 0.1mm
+#define WIDTH 60 //10mm
+#define HEIGHT 60  //10mm
+#define GRID_N 600 //dx = 0.1mm
 #define N_STEPS 2000
-#define TASK "aggregation"
+#define TASK "diffusion"
 #define BLOCK_SIZE 32
 #define SEED 1333
 std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
