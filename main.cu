@@ -28,12 +28,12 @@ void get_last_error() {
 
 int main(int argc, char* argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
-    printf("CP1: start\n");
+    //printf("CP1: start\n");
     //INPUTS
-    const char* joint_distribution_file_name = "/state_estimations/joint_distributions.json";
-    const char *exit_params_filename = "/state_estimations/l1.json";
-    const char *transition_params_filename = "/state_estimations/l2.json";
-    const char *extracted_params_filename = "/state_estimations/behavior_distributions_off_food.json";
+    const char* joint_distribution_file_name = "/state_estimations/fish_data/joint_distributions.json";
+    const char *exit_params_filename = "/state_estimations/l1_aggregation.json";
+    const char *transition_params_filename = "/state_estimations/l2_aggregation.json";
+    const char *extracted_params_filename = "/state_estimations/fish_data/behavior_distributions.json";
     //OUTPUTS
     const char *agent_log = "/sim/agent_data.json";
     const char *agent_count_grid_log = "/sim/agent_count_grid.dat";
@@ -44,28 +44,64 @@ int main(int argc, char* argv[]) {
     //auto* states = new int[WORM_COUNT * N_STEPS]; // Matrix to store the state for each agent at each timestep
     int* agent_count_grid, *h_agent_count_grid = new int[GRID_N * GRID_N];
     float* pheromone_grid, *h_pheromone_grid = new float[GRID_N * GRID_N], *new_pheromone;
+    int worm_count = WORM_COUNT;
+    float lambda = LAMBDA;
+    int seed = SEED, agent_id = -1;;
+    char target_json[256], label_sequence_filename[256]; //target_json will be where positions are saved
+    WormLabelSequence seq;
 
-    float* h_positions_step = new float[WORM_COUNT * 2];
-    int*   h_states_step    = new int[WORM_COUNT];
 
-    FILE* f_positions  = open_agent_stream("/sim/positions_b.dat", N_STEPS, WORM_COUNT);
-    FILE* f_states     = open_agent_stream("/sim/states_b.dat",    N_STEPS, WORM_COUNT);
+    //check if seed is provided as argument
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
+            seed = atoi(argv[++i]);
+        if (strcmp(argv[i], "--lambda")==0 && i+1<argc)
+            lambda = atof(argv[++i]);
+        if (strcmp(argv[i], "--worm-count")==0 & i+1<argc)
+            worm_count = atoi(argv[++i]);
+        if (strcmp(argv[i], "--agent") == 0 && i+1 < argc)
+            agent_id = atoi(argv[++i]);
+    }
+    if (agent_id < 0 && ENABLE_DETERMINISTIC_REPLAY){
+        fprintf(stderr, "agent_id<0 and ENABLE_DETERMINISTIC_REPLAY=true. Label sequence imposed without specified agent id.\n");
+        return 1;
+    }
+    if (agent_id >= 0 && ENABLE_DETERMINISTIC_REPLAY) {
+        printf("agent id: %d\n", agent_id);
+        snprintf(target_json, sizeof(target_json),
+                 "/sim/agent_%d_positions_b.dat", agent_id);
+        snprintf(label_sequence_filename, sizeof(label_sequence_filename),
+                 "/state_estimations/fish_data/label_sequences/fish_%d_labels.json", agent_id);
+        seq = load_worm_labels_to_device(label_sequence_filename);
+        if (!seq.d_labels) {
+            fprintf(stderr, "Failed to load labels for agent %d\n", agent_id);
+            return 1;
+        }
+
+    } else {
+        snprintf(target_json, sizeof(target_json), "/sim/positions_b.dat");
+    }
+    float* h_positions_step = new float[worm_count * 3]; //x,y,angle
+    int*   h_states_step    = new int[worm_count];
+    const int n_logged = (N_STEPS + LOG_EVERY - 1) / LOG_EVERY;
+    FILE* f_positions  = open_agent_stream(target_json, n_logged, worm_count);
+    FILE* f_states     = open_agent_stream("/sim/states_b.dat",    n_logged, worm_count);
     FILE* f_agent_grid = open_grid_stream(agent_count_grid_log, N_STEPS, GRID_N);
     FILE* f_phi_grid   = open_grid_stream(pheromone_grid_log,   N_STEPS, GRID_N);
 
     StateParams* d_params = nullptr;
     DurationDistributionHost *h_states = new DurationDistributionHost[N_STATES];
-    size_t size = WORM_COUNT * sizeof(Agent);
-    Agent* d_agents, *h_agents = new Agent[WORM_COUNT];
+    size_t size = worm_count * sizeof(Agent);
+    Agent* d_agents, *h_agents = new Agent[worm_count];
     TransitionModelHost* h_exit = new TransitionModelHost[N_STATES];
     TransitionModelHost* h_transitions = new TransitionModelHost[N_STATES*N_STATES];
+    CompoundExitModelHost* h_exit_compound = new CompoundExitModelHost[N_STATES];
+    CompoundTransitionModelHost* h_transitions_compound = new CompoundTransitionModelHost[N_STATES*N_STATES];
     curandState* d_curand_states, *d_states_grids;
-    //int* agent_count_grids = new int[N_STEPS * GRID_N * GRID_N];
-    //float* phi_grids = new float[N_STEPS * GRID_N * GRID_N];
-    int seed = SEED;
+
     try {
-        cudaMalloc(&d_curand_states, WORM_COUNT * sizeof(curandState));
-        cudaMalloc(&d_agents, WORM_COUNT * sizeof(Agent));
+        cudaMalloc(&d_curand_states, worm_count * sizeof(curandState));
+        cudaMalloc(&d_agents, worm_count * sizeof(Agent));
         //STATES
         //-duration
         load_state_duration(h_states, extracted_params_filename);
@@ -80,23 +116,19 @@ int main(int argc, char* argv[]) {
         get_last_error();
         printf("loading joint distribution: %s\n", joint_distribution_file_name);
         //AGENTS
-        //check if seed is provided as argument
-        for (int i = 1; i < argc; i++) {
-            if (strcmp(argv[i], "--seed") == 0 && i + 1 < argc)
-                seed = atoi(argv[++i]);
-        }
-        initialize_rng<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_curand_states, seed);
+
+        initialize_rng<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_curand_states, seed);
         get_last_error();
         cudaDeviceSynchronize();
-        initAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states, seed,
-                                                                               WORM_COUNT);
+        initAgents<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states, seed,
+                                                                               worm_count);
         printf("Initializing agents\n");
         get_last_error();
         cudaDeviceSynchronize();
         cudaMemcpy(h_agents, d_agents, size, cudaMemcpyDeviceToHost);
 
         //INIT AGENT GRID
-        init_agent_count_grid(h_agent_count_grid, h_agents, &agent_count_grid);
+        init_agent_count_grid(h_agent_count_grid, h_agents, worm_count, &agent_count_grid);
         get_last_error();
 
         //INIT PHEROMONE GRID
@@ -105,16 +137,29 @@ int main(int argc, char* argv[]) {
         cudaMalloc(&new_pheromone, sizeof(float) * GRID_N * GRID_N);
 
         //L1-L2 FUNCTIONS
-        load_exit_data(h_exit, exit_params_filename);
-        upload_exit_models(h_exit);
-        cudaDeviceSynchronize();
-        get_last_error();
-        printf("Loading transition data from file...\n");
-        load_transition_data(h_transitions, transition_params_filename);
-        printf("Uploading transition data to device...\n");
-        upload_transition_models(h_transitions);
-        cudaDeviceSynchronize();
-        get_last_error();
+        if(TRANSITION_TYPE==0) {
+            load_exit_data(h_exit, exit_params_filename);
+            upload_exit_models(h_exit);
+            cudaDeviceSynchronize();
+            get_last_error();
+            printf("Loading transition data from file...\n");
+            load_transition_data(h_transitions, transition_params_filename);
+            printf("Uploading transition data to device...\n");
+            upload_transition_models(h_transitions);
+            cudaDeviceSynchronize();
+            get_last_error();
+        } else {
+            load_compound_exit_data(*h_exit_compound, lambda);
+            upload_compound_exit_model(h_exit_compound);
+            cudaDeviceSynchronize();
+            get_last_error();
+            printf("Loading compound transition data from file...\n");
+            load_compound_transition_data(*h_transitions_compound, lambda);
+            printf("Uploading compound transition data from file...\n");
+            upload_compound_transition_model(h_transitions_compound);
+            cudaDeviceSynchronize();
+            get_last_error();
+        }
 
         dim3 gridSize((GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE, (GRID_N + BLOCK_SIZE - 1) / BLOCK_SIZE);
         dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
@@ -122,21 +167,42 @@ int main(int argc, char* argv[]) {
         /*float* d_dphi_log;
         cudaMalloc(&d_dphi_log, (size_t)WORM_COUNT * N_STEPS * sizeof(float));
         */
+        if(agent_id >= 0 && ENABLE_DETERMINISTIC_REPLAY){
+            updateAgentStateDeterministic<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(
+                    d_agents, seq.d_labels, seq.length, 0);
+            cudaDeviceSynchronize();
+        }
         for (int i = 0; i < N_STEPS; ++i) {
             //printf("step %d\n", i);
             //printf("logging:\n");
             //LOG POSITIONS AND STATES
-            for (int j = 0; j < WORM_COUNT; ++j) {
-                h_positions_step[j * 2]     = h_agents[j].x;
-                h_positions_step[j * 2 + 1] = h_agents[j].y;
-                h_states_step[j]            = h_agents[j].state;
+            if(i%LOG_EVERY ==0){
+                for (int j = 0; j < worm_count; ++j) {
+                    h_positions_step[j * 3]     = h_agents[j].x;
+                    h_positions_step[j * 3 + 1] = h_agents[j].y;
+                    h_positions_step[j * 3 + 2] = h_agents[j].angle;
+                    h_states_step[j]            = h_agents[j].state;
+                }
+                fwrite(h_positions_step, sizeof(float), worm_count * 3, f_positions);
+                fwrite(h_states_step,    sizeof(int),   worm_count,     f_states);
+                if(ANIMAL_TYPE==0) {
+                    write_grid_step(f_agent_grid, h_agent_count_grid, GRID_N);
+                    write_grid_step(f_phi_grid, h_pheromone_grid, GRID_N);
+                }
             }
-            fwrite(h_positions_step, sizeof(float), WORM_COUNT * 2, f_positions);
-            fwrite(h_states_step,    sizeof(int),   WORM_COUNT,     f_states);
             //printf("moving\n");
             //MOVE AGENTS
-            moveAgents<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,WORM_COUNT, i, d_params,
-                                                                                   agent_count_grid);
+
+            if(ANIMAL_TYPE==0){
+                    moveAgents<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,worm_count, i, d_params,
+                                                                                       agent_count_grid);
+
+            }
+            else{
+                moveFishAgents<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,worm_count, i, d_params,
+                                                                                       agent_count_grid);
+
+            }
             cudaError_t err = cudaGetLastError();
             if (err != cudaSuccess) {
                 fprintf(stderr, "moveAgents failed at step %d: %s\n", i, cudaGetErrorString(err));
@@ -144,24 +210,29 @@ int main(int argc, char* argv[]) {
             }
             get_last_error();
             cudaDeviceSynchronize();
-            cudaMemcpy(h_agents, d_agents, size, cudaMemcpyDeviceToHost);
-            //PHEROMONE UPDATE
-            //printf("updating grids\n");
-            updateGrid<<<gridSize, blockSize>>>(pheromone_grid, agent_count_grid, new_pheromone);
-            err = cudaGetLastError();
-            if (err != cudaSuccess) {
-                fprintf(stderr, "Update grid failed at step %d: %s\n", i, cudaGetErrorString(err));
-                return 1;
+            if(ANIMAL_TYPE==0){
+                cudaMemcpy(h_agents, d_agents, size, cudaMemcpyDeviceToHost);
+                //PHEROMONE UPDATE
+                //printf("updating grids\n");
+
+                updateGrid<<<gridSize, blockSize>>>(pheromone_grid, agent_count_grid, new_pheromone);
+                err = cudaGetLastError();
+                if (err != cudaSuccess) {
+                    fprintf(stderr, "Update grid failed at step %d: %s\n", i, cudaGetErrorString(err));
+                    return 1;
+                }
+                get_last_error();
+                cudaDeviceSynchronize();
+                //printf("swapping grids\n");
+                std::swap(pheromone_grid, new_pheromone);
             }
-            get_last_error();
-            cudaDeviceSynchronize();
-            //printf("swapping grids\n");
-            std::swap(pheromone_grid, new_pheromone);
+
 
             //COPY GRIDS FROM DEVICE TO HOST
-            cudaMemcpy(h_agent_count_grid, agent_count_grid, GRID_N * GRID_N * sizeof(int), cudaMemcpyDeviceToHost);
-            cudaMemcpy(h_pheromone_grid, pheromone_grid, GRID_N * GRID_N * sizeof(float), cudaMemcpyDeviceToHost);
-
+            if(ANIMAL_TYPE==0) {
+                cudaMemcpy(h_agent_count_grid, agent_count_grid, GRID_N * GRID_N * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(h_pheromone_grid, pheromone_grid, GRID_N * GRID_N * sizeof(float), cudaMemcpyDeviceToHost);
+            }
             //LOG PHEROMONE AND COUNT GRIDS
             /*for (int j = 0; j < GRID_N; j++) {
                 for (int k = 0; k < GRID_N; k++) {
@@ -169,13 +240,29 @@ int main(int argc, char* argv[]) {
                     phi_grids[(i * GRID_N + j) * GRID_N + k] = h_pheromone_grid[j * GRID_N + k];
                 }
             }*/
-            write_grid_step(f_agent_grid, h_agent_count_grid, GRID_N);
-            write_grid_step(f_phi_grid,   h_pheromone_grid,   GRID_N);
 
+            //printf("updating states...\n");
             //UPDATE STATES -- ~collective
-            updateAgentStateCollective<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents,
-                                                                                                   d_curand_states, i,
-                                                                                                   WORM_COUNT, d_params,pheromone_grid);
+            if(agent_id>=0 && ENABLE_DETERMINISTIC_REPLAY){
+                updateAgentStateDeterministic<<<(WORM_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(
+                        d_agents, seq.d_labels, seq.length, i+1);
+            } else {
+                if(ANIMAL_TYPE==0) {
+                    updateAgentStateCollective<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents,
+                                                                                                           d_curand_states,
+                                                                                                           i,
+                                                                                                           worm_count,
+                                                                                                           d_params,
+                                                                                                           pheromone_grid);
+                }
+                else{
+                    if(TRANSITION_TYPE==-1)
+                        updateFishState<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states, worm_count);
+                    else
+                        updateFishStateCollective<<<(worm_count + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE>>>(d_agents, d_curand_states,i, worm_count);
+
+                }
+            }
             err = cudaGetLastError();
             if (err != cudaSuccess) {
                 fprintf(stderr, "updateAgent failed at step %d: %s\n", i, cudaGetErrorString(err));
@@ -189,7 +276,7 @@ int main(int argc, char* argv[]) {
         //FINAL LOG WITH POSITIONS AND STATES
         printf("logging\n");
         //saveAllDataToJSON(agent_log, positions, states);
-        saveSimulationParameters(param_log);
+        saveSimulationParameters(param_log, worm_count);
         //LOG GRIDS, this should be sensible as it's O(2000 * 100 * 100) ~ 20 000 000
         //perhaps a sparse implementation? (i,j):x IFF x>0
         //log_matrices(agent_count_grids, phi_grids, agent_count_grid_log, pheromone_grid_log, true);

@@ -1,5 +1,41 @@
 //
-// Created by nema on 17/08/26.
+/**
+ * Logging utilities and output file formats.
+ *
+ * Binary grid files:
+ *   Header: int32 n_steps, int32 grid_n
+ *   Dense:  N_STEPS * GRID_N * GRID_N raw values, timestep-major,
+ *           row-major.
+ *
+ * Sparse binary grid files:
+ *   Header: int32 n_steps, int32 grid_n
+ *   For each timestep:
+ *     int32 timestep, int32 nnz,
+ *     followed by nnz entries of:
+ *       int32 row, int32 column, T value
+ *
+ * Text grid files:
+ *   Dense: each timestep is written as "# t=<t>" followed by GRID_N
+ *          CSV rows.
+ *   Sparse: one line per timestep:
+ *          "t: (i,j):value (i,j):value ..."
+ *
+ * Sparsity is selected automatically: a timestep is sparse if more than
+ * half of its cells are zero, and the whole stack is stored sparsely if
+ * more than half of the timesteps are sparse.
+ *
+ * Filename suffixes:
+ *   normal         = text
+ *   _b             = binary
+ *   _sparse        = sparse text
+ *   _sparse_b      = sparse binary
+ *
+ * Agent trajectory binary files:
+ *   Header: int32 n_steps, int32 worm_count
+ *
+ * Simulation parameters are saved as JSON, including all parameters
+ * required to interpret/reproduce the simulation output.
+ */
 //
 
 #ifndef UNTITLED2_LOGGING_H
@@ -37,18 +73,18 @@ FILE* open_agent_stream(const char* filename, int n_steps, int worm_count) {
 }
 
 
-void saveAllDataToJSON(const char* filename, float* positions, int* sub_states) {
+void saveAllDataToJSON(const char* filename, float* positions, int* sub_states, int worm_count) {
     nlohmann::json json_data;
     json_data["positions"] = nlohmann::json::array();
     json_data["states"] = nlohmann::json::array();
-    for (int i = 0; i < WORM_COUNT; ++i) {
+    for (int i = 0; i < worm_count; ++i) {
         nlohmann::json agent_data;
         agent_data["positions"] = nlohmann::json::array();
         agent_data["states"] = nlohmann::json::array();
 
         for (int j = 0; j < N_STEPS; ++j) {
-            agent_data["positions"].push_back({positions[(j * WORM_COUNT + i) * 2], positions[(j * WORM_COUNT + i) * 2 + 1]});
-            agent_data["states"].push_back(sub_states[j * WORM_COUNT + i]);
+            agent_data["positions"].push_back({positions[(j * worm_count + i) * 2], positions[(j * worm_count + i) * 2 + 1]});
+            agent_data["states"].push_back(sub_states[j * worm_count + i]);
         }
 
         json_data["positions"].push_back(agent_data["positions"]);
@@ -60,12 +96,12 @@ void saveAllDataToJSON(const char* filename, float* positions, int* sub_states) 
     file.close();
 }
 
-void saveSimulationParameters(const char* filename)
+void saveSimulationParameters(const char* filename, int worm_count)
 {
     nlohmann::json p;
 
     p["N_STATES"] = N_STATES;
-    p["WORM_COUNT"] = WORM_COUNT;
+    p["WORM_COUNT"] = worm_count;
     p["WIDTH"] = WIDTH;
     p["HEIGHT"] = HEIGHT;
     p["GRID_N"] = GRID_N;
@@ -83,6 +119,8 @@ void saveSimulationParameters(const char* filename)
     p["PHI_DIFFUSION_CONSTANT"] = PHI_DIFFUSION_CONSTANT;
     p["SLOWDOWN_FACTOR"] = SLOWDOWN_FACTOR;
     p["MAX_CONCENTRATION"] = MAX_CONCENTRATION;
+
+    p["LAMBDA"] = LAMBDA;
 
     std::ofstream file(filename);
     if (!file) {

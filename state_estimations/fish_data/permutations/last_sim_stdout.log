@@ -1,0 +1,69 @@
+./offline_build_and_run.sh
+/home/nema/CLionProjects/untitled2
+Base image already present.
+Building Docker image: cuda-agent-sim
+Total reclaimed space: 0B
+Running container with GPU support...
+Loading state data from /state_estimations/fish_data/permutations/behavior_distributions.json
+loading distributions:
+
+Speed observations:
+  min = 0.008102
+  max = 12.037454
+loading joint distribution: /state_estimations/fish_data/permutations/joint_distributions.json
+Initializing agents
+Loading compound transition data from file...
+Uploading compound transition data from file...
+logging
+Exit code: 0
+
+--- stderr ---
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 616B done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/cuda-env:12.2
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.1s
+
+#4 [1/9] FROM docker.io/library/cuda-env:12.2
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 142.86kB 0.0s done
+#5 DONE 0.1s
+
+#6 [3/9] RUN rm -rf /app/*
+#6 CACHED
+
+#7 [4/9] COPY CMakeLists.txt .
+#7 CACHED
+
+#8 [5/9] COPY headers/ headers/
+#8 CACHED
+
+#9 [6/9] COPY include/ include/
+#9 CACHED
+
+#10 [7/9] COPY json/ json/
+#10 CACHED
+
+#11 [8/9] COPY main.cu .
+#11 CACHED
+
+#12 [2/9] WORKDIR /app
+#12 CACHED
+
+#13 [9/9] RUN cmake -S . -B build && cmake --build build --parallel $(nproc)
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 writing image sha256:4f28b1babf941cca572442a7510b2434020caa078230b39b1de703afe2e9ce5b done
+#14 naming to docker.io/library/cuda-agent-sim done
+#14 DONE 0.0s

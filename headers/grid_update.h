@@ -7,23 +7,37 @@
 #include "parameters.h"
 #include <cuda_runtime.h>
 
-void init_agent_count_grid(int* agent_count_grid, Agent h_agents[WORM_COUNT], int** d_agent_count_grid){
-    for(int i=0; i<GRID_N; i++)
-        for(int j=0; j<GRID_N; j++)
+void init_agent_count_grid(
+        int* agent_count_grid,
+        Agent* h_agents,
+        int worm_count,
+        int** d_agent_count_grid
+){
+    for(int i = 0; i < GRID_N; i++)
+        for(int j = 0; j < GRID_N; j++)
             agent_count_grid[i*GRID_N + j] = 0;
 
     float dx_grid = (float)WIDTH / GRID_N;
     float dy_grid = (float)HEIGHT / GRID_N;
 
-    for(int i=0; i<WORM_COUNT; i++){
+    for(int i = 0; i < worm_count; i++){
         Agent agent = h_agents[i];
         int agent_i = (int)(agent.x / dx_grid);
         int agent_j = (int)(agent.y / dy_grid);
         agent_count_grid[agent_i*GRID_N + agent_j]++;
     }
-    cudaMalloc((void**)d_agent_count_grid, sizeof(int) * GRID_N * GRID_N);
-    cudaMemcpy(*d_agent_count_grid, agent_count_grid,
-               sizeof(int) * GRID_N * GRID_N, cudaMemcpyHostToDevice);
+
+    cudaMalloc(
+            (void**)d_agent_count_grid,
+            sizeof(int) * GRID_N * GRID_N
+    );
+
+    cudaMemcpy(
+            *d_agent_count_grid,
+            agent_count_grid,
+            sizeof(int) * GRID_N * GRID_N,
+            cudaMemcpyHostToDevice
+    );
 }
 
 //init pheromone grid and upload it to device

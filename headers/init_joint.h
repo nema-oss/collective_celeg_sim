@@ -232,17 +232,6 @@ static void upload_state(const StateParamsHost& sp, StateParams& out_d) {
     std::vector<JointTable> tables_with_dptrs(sp.n_durations);
     for (int i = 0; i < sp.n_durations; ++i) {
         tables_with_dptrs[i].n     = sp.tables[i].n;
-        printf("state table %d: n=%d\n", i, sp.tables[i].n);
-
-        for (int k = 0; k < sp.tables[i].n; ++k) {
-            if (sp.obs_data[i][2*k] == 0.0f) {
-                printf("HOST ZERO: table=%d k=%d speed=%f angle=%f\n",
-                       i,
-                       k,
-                       sp.obs_data[i][2*k],
-                       sp.obs_data[i][2*k+1]);
-            }
-        }
         tables_with_dptrs[i].obs   = device_alloc_copy(sp.obs_data[i]);
         tables_with_dptrs[i].prob  = device_alloc_copy(sp.prob_data[i]);
         tables_with_dptrs[i].alias = device_alloc_copy(sp.alias_data[i]);

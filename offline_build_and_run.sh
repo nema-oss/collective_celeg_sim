@@ -8,10 +8,15 @@ DOCKERFILE_PATH=.
 
 # === Parse args ===
 seed=0
+agent=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --seed)
             seed="$2"
+            shift 2
+            ;;
+        --agent)
+            agent="$2"
             shift 2
             ;;
         *)
@@ -20,6 +25,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Only pass --agent when given, so the default (no agent) mode still works
+EXTRA_ARGS=()
+if [[ -n "$agent" ]]; then
+    EXTRA_ARGS+=(--agent "$agent")
+fi
 
 # Get the directory of the script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,7 +59,7 @@ echo "Running container with GPU support..."
 docker run --rm --privileged --gpus all \
     -v "$STATE_ESTIMATIONS_HOST":"$STATE_ESTIMATIONS_CONTAINER" \
     -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \
-    "$IMAGE_NAME" --seed "$seed"
+    "$IMAGE_NAME" --seed "$seed" "${EXTRA_ARGS[@]}"
 #docker run --rm --privileged --gpus all \
 #    -v "$STATE_ESTIMATIONS_HOST":"$STATE_ESTIMATIONS_CONTAINER" \
 #    -v "$SIMULATION_HOST":"$SIMULATION_CONTAINER" \

@@ -29,8 +29,10 @@ def load_and_animate_agents_and_grid2(json_file_path, fps, dest_file_path="anima
 
     # Prepare the figure and axis
     fig, ax = plt.subplots()
-    ax.set_xlim(0, WIDTH)
-    ax.set_ylim(0, HEIGHT)
+    MARGIN = 0.5
+
+    ax.set_xlim(0 - MARGIN, WIDTH + MARGIN)
+    ax.set_ylim(0 - MARGIN, HEIGHT + MARGIN)
 
     # Create a list of scatter plot objects for each agent
     scatters = [ax.plot([], [], 'o', color='white', markersize=1.0)[0] for _ in range(N)]
@@ -64,9 +66,12 @@ def load_and_animate_agents_and_grid2(json_file_path, fps, dest_file_path="anima
         cbar = fig.colorbar(im, ax=ax)
         cbar.set_label('Chemical Concentration')
     else:
-        # set to a blank image if max concentration is 0
-        im = ax.imshow(np.zeros_like(X), extent=[0, WIDTH, 0, HEIGHT], origin='lower', cmap='viridis', vmin=0, vmax=1)
-    # Initialization function to set up the scatter plot and grid
+        # set to a blank image if max concentration is 0, extended to cover the margin too
+        im = ax.imshow(
+            np.zeros((2, 2)),
+            extent=[0 - MARGIN, WIDTH + MARGIN, 0 - MARGIN, HEIGHT + MARGIN],
+            origin='lower', cmap='viridis', vmin=0, vmax=1
+        )# Initialization function to set up the scatter plot and grid
     def init():
         for i, scatter in enumerate(scatters):
             scatter.set_data([position_matrix[i][0][0]], [position_matrix[i][0][1]])

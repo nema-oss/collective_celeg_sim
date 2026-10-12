@@ -11,5 +11,8 @@ COPY main.cu .
 
 # Configure and build in one layer to avoid intermediate cache bloat
 RUN cmake -S . -B build && cmake --build build --parallel $(nproc)
-
+#RUN cmake -S . -B build \
+#    -DCMAKE_BUILD_TYPE=Debug \
+#    -DCMAKE_CUDA_FLAGS="-G -g" \
+#    && cmake --build build --parallel $(nproc)
 ENTRYPOINT ["/app/build/untitled2"]

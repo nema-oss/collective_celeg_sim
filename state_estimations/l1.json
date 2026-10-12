@@ -2,9 +2,9 @@
   "2": {
     "p_off_food": 0.0,
     "tau": -1,
-    "model_coeff": -3.2414877723169724,
-    "model_intercept": -4.2471821542825055,
-    "model_height": 0.31556685739982404,
+    "model_coeff": 0.184153573093365,
+    "model_intercept": -0.679621078760873,
+    "model_height": 0.5146201314083981,
     "mean": 0,
     "std": 1,
     "p_relevant": 0,
