@@ -31,8 +31,8 @@ int main(int argc, char* argv[]) {
     //printf("CP1: start\n");
     //INPUTS
     const char* joint_distribution_file_name = "/state_estimations/fish_data/joint_distributions.json";
-    const char *exit_params_filename = "/state_estimations/l1_aggregation.json";
-    const char *transition_params_filename = "/state_estimations/l2_aggregation.json";
+    const char *exit_params_filename = "/state_estimations/l1.json";
+    const char *transition_params_filename = "/state_estimations/l2.json";
     const char *extracted_params_filename = "/state_estimations/fish_data/behavior_distributions.json";
     //OUTPUTS
     const char *agent_log = "/sim/agent_data.json";
