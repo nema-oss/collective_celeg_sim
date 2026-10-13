@@ -214,8 +214,8 @@ def mean_alignment(traj: np.ndarray) -> float:
     using the logged angle (traj[..., 2])."""
     th = traj[..., 2]                                   # (n_agents, n_frames)
     a_12 = np.cos(th[0] - th[1])
-    a_21 = np.cos(th[1] - th[0])
-    a_t = 0.5 * (a_12 + a_21)
+    #a_21 = np.cos(th[1] - th[0])
+    a_t = a_12 #0.5 * (a_12 + a_21)
     start = int(len(a_t) * BURN_IN_FRAC)
     return float(a_t[start::EVAL_EVERY].mean())
 

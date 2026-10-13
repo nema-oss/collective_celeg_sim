@@ -26,10 +26,10 @@ std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
 #define SLOWDOWN_FACTOR 0.01f
 #define MAX_CONCENTRATION 30000000000.0f
 #define BOUNDARY_TYPE 0 //or "PERIODIC":0,"WALL":1
-#define TRANSITION_TYPE 0 //0: simple, 1: compound transition model, -1: (fish) constant mean matrix
+#define TRANSITION_TYPE 0 //0: simple L1L2, 1: compound L1L2, -1: (fish) constant mean matrix
 #define LAMBDA 0.0f //0->dispersal, 1->aggregation
 #define METRIC_TYPE 0 // 0->cluster metric, 1->compound metric
 #define ANIMAL_TYPE 1 // 0->worm, 1-> fish
 #define ENABLE_DETERMINISTIC_REPLAY 0
-#define LOG_EVERY 100
+#define LOG_EVERY 1
 #endif //UNTITLED2_PARAMETERS_H

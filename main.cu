@@ -210,8 +210,13 @@ int main(int argc, char* argv[]) {
             }
             get_last_error();
             cudaDeviceSynchronize();
-            if(ANIMAL_TYPE==0){
+
+            if(i%LOG_EVERY==0){
                 cudaMemcpy(h_agents, d_agents, size, cudaMemcpyDeviceToHost);
+            }
+
+            if(ANIMAL_TYPE==0){
+
                 //PHEROMONE UPDATE
                 //printf("updating grids\n");
 
