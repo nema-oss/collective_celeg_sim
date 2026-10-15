@@ -41,6 +41,7 @@ import argparse
 import copy
 import json
 import os
+import pickle
 import subprocess
 import time
 from pathlib import Path
@@ -73,7 +74,7 @@ REFERENCE_TRANSITIONS = {(0, 0), (1, 1), (2, 2)}   # height fixed to 1.0
 N_AGENTS   = 2
 INIT_DIST  = 5.0            # initial inter-agent distance (simulator units)  # ASSUMPTION
 N_ENSEMBLE = 5              # seeds per candidate
-MAXITER    = 30
+MAXITER    = 20
 POPSIZE    = 14
 SIGMA0     = 0.6
 
@@ -273,10 +274,31 @@ def _fmt_hms(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-def run_cmaes(fitness_fn, label: str):
-    es = cma.CMAEvolutionStrategy(
-        np.zeros(N_PARAMS),
-        SIGMA0,
+def _ckpt_path(label: str) -> str:
+    return os.path.join(STATE_EST_DIR, f"cma_state_{label.lower()}.pkl")
+
+
+def run_cmaes(fitness_fn, label: str, x0=None, sigma0=SIGMA0, resume=False):
+    """
+    resume=True : continue from the pickled CMA-ES state (mean, sigma, covariance),
+                  running MAXITER MORE iterations.
+    x0 given    : warm start from a saved best vector with a fresh covariance.
+    """
+    ckpt = _ckpt_path(label)
+    if resume:
+        with open(ckpt, "rb") as f:
+            es = pickle.loads(f.read())
+        es.opts.set({"maxiter": es.countiter + MAXITER})
+        print(f"[{label}] Resumed from {ckpt} at iter {es.countiter}, sigma={es.sigma:.4f}")
+    else:
+        es = _new_es(x0, sigma0)
+    return _run_loop(es, fitness_fn, label, ckpt)
+
+
+def _new_es(x0, sigma0):
+    return cma.CMAEvolutionStrategy(
+        np.zeros(N_PARAMS) if x0 is None else np.asarray(x0, dtype=float),
+        sigma0,
         {
             "maxiter": MAXITER,
             "popsize": POPSIZE,
@@ -287,10 +309,14 @@ def run_cmaes(fitness_fn, label: str):
         },
     )
 
-    print(f"\n{'=' * 60}\n  Starting CMA-ES: {label}  ({N_PARAMS} params)\n{'=' * 60}\n")
+
+def _run_loop(es, fitness_fn, label, ckpt):
+    print(f"\n{'=' * 60}\n  CMA-ES: {label}  ({N_PARAMS} params)\n{'=' * 60}\n")
 
     best_params, best_fitness = None, np.inf
-    iteration, n_eval, total_time = 0, 0, 0.0
+    if es.countiter > 0:                       # resumed: keep the best so far
+        best_params, best_fitness = es.result.xbest.copy(), float(es.result.fbest)
+    iteration, n_eval, total_time = es.countiter, 0, 0.0
     total_est = es.popsize * MAXITER
     run_start = time.time()
 
@@ -323,6 +349,8 @@ def run_cmaes(fitness_fn, label: str):
                 best_fitness, best_params = fit, sol.copy()
 
         es.tell(solutions, fitnesses)
+        with open(ckpt, "wb") as f:           # checkpoint every iteration
+            f.write(es.pickle_dumps())
         avg = total_time / n_eval
         print(f"\n  [{label}] iter={iteration:03d} | best={min(fitnesses):+.4f} | "
               f"mean={np.mean(fitnesses):+.4f} | sigma={es.sigma:.4f} | "
@@ -363,14 +391,28 @@ if __name__ == "__main__":
     group.add_argument("-s",  action="store_true", help="optimize social (maximize 0.5A+0.5B)")
     group.add_argument("-a",  action="store_true", help="optimize anti-social (minimize 0.5A+0.5B)")
     group.add_argument("-sa", action="store_true", help="optimize both, sequentially")
+    parser.add_argument("--resume", action="store_true",
+                        help="continue from cma_state_<label>.pkl for MAXITER more iterations")
+    parser.add_argument("--warm", action="store_true",
+                        help="warm start from cma_best_<label>.npy with a fresh covariance")
+    parser.add_argument("--sigma", type=float, default=0.2,
+                        help="initial step size for --warm (default 0.2)")
     args = parser.parse_args()
 
+    def _kw(label):
+        if args.resume:
+            return {"resume": True}
+        if args.warm:
+            x0 = np.load(os.path.join(STATE_EST_DIR, f"cma_best_{label.lower()}.npy"))
+            return {"x0": x0, "sigma0": args.sigma}
+        return {}
+
     if args.s or args.sa:
-        p, fit = run_cmaes(fitness_social, "SOCIAL")
+        p, fit = run_cmaes(fitness_social, "SOCIAL", **_kw("SOCIAL"))
         save_result(p, "social")
         print(f"  Social score      : {-fit:+.4f}")
 
     if args.a or args.sa:
-        p, fit = run_cmaes(fitness_antisocial, "ANTISOCIAL")
+        p, fit = run_cmaes(fitness_antisocial, "ANTISOCIAL", **_kw("ANTISOCIAL"))
         save_result(p, "antisocial")
         print(f"  Anti-social score : {fit:+.4f}")
