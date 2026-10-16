@@ -29,7 +29,7 @@ Parameter vector (normalised to [-1, 1], then mapped to real ranges):
   Total 27 values.
 
 !! ASSUMPTIONS TO CHECK (marked with  # ASSUMPTION  below) !!
-  - the simulator accepts  --seed  and  --init-dist
+  - the simulator accepts  --seed
   - positions_b.dat is int32 [n_steps, n_agents] header, then float32
     (x, y, angle) per agent per logged frame, time first
   - states_b.dat is int32: [n_steps, n_agents] header, then n_steps*n_agents
@@ -401,7 +401,10 @@ if __name__ == "__main__":
 
     def _kw(label):
         if args.resume:
-            return {"resume": True}
+            if os.path.exists(_ckpt_path(label)):
+                return {"resume": True}
+            print(f"[{label}] No checkpoint found, starting fresh.")
+            return {}
         if args.warm:
             x0 = np.load(os.path.join(STATE_EST_DIR, f"cma_best_{label.lower()}.npy"))
             return {"x0": x0, "sigma0": args.sigma}
