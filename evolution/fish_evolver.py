@@ -74,7 +74,7 @@ REFERENCE_TRANSITIONS = {(0, 0), (1, 1), (2, 2)}   # height fixed to 1.0
 N_AGENTS   = 2
 INIT_DIST  = 5.0            # initial inter-agent distance (simulator units)  # ASSUMPTION
 N_ENSEMBLE = 5              # seeds per candidate
-MAXITER    = 20
+MAXITER    = 100
 POPSIZE    = 14
 SIGMA0     = 0.6
 
@@ -303,8 +303,8 @@ def _new_es(x0, sigma0):
             "maxiter": MAXITER,
             "popsize": POPSIZE,
             "verbose": 1,
-            "tolx":    1e-6,
-            "tolfun":  1e-6,
+            "tolx":    1e-3,
+            "tolfun":  1e-3,
             "bounds":  [[-1.0] * N_PARAMS, [1.0] * N_PARAMS],
         },
     )
