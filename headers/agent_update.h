@@ -176,7 +176,7 @@ __global__ void moveFishAgents(Agent* agents, curandState* local_state, int fish
                 agents[agent_id].bout_sign = (curand_uniform(&local_rng) < 0.5f) ? -1.f : 1.f;
             float s = (curand_uniform(&local_rng) < Q) ? agents[agent_id].bout_sign
                                                  : ((curand_uniform(&local_rng) < 0.5f) ? -1.f : 1.f);
-            angle_change = s * fabsf(angle_change);
+            //angle_change = s * fabsf(angle_change);
         }
 
         //simple state 2 rule: decelerate with a = 0.995
@@ -423,6 +423,7 @@ __global__ void updateFishStateCollective(
     }
 
     int next_state = select_next_state(p, &local_rng, N_STATES);
+    //printf("agent %d t=%d transitions %d->%d\n", agent_id, timestep, agent_state, next_state);
     if (next_state < 0 || next_state >= N_STATES) {
         printf("ERROR next_state=%d (agent %d)\n", next_state, agent_id);
         rng_states[agent_id] = local_rng;

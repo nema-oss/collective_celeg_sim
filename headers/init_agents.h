@@ -140,7 +140,7 @@ __global__ void initAgents(Agent* agents, curandState* states, unsigned long see
         agents[id].bout_sign = 1.0f;
 
         if(ANIMAL_TYPE==1){
-            agents[id].x = WIDTH  / 2.0f + (id == 0 ? -0.5f : 0.5f) * 52.0f;
+            agents[id].x = WIDTH  / 2.0f + (id == 0 ? -0.5f : 0.5f) * 5.0f;
             agents[id].y = HEIGHT / 2.0f;
             agents[id].angle          = 0.0f;
             agents[id].previous_angle = 0.0f;
