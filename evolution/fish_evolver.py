@@ -78,13 +78,11 @@ MAXITER    = 100
 POPSIZE    = 14
 SIGMA0     = 0.6
 
-W_A, W_B       = 0.5, 0.5   # score = W_A*A + W_B*B
+W_A, W_B       = 1.0, 0.0   # score = W_A*A + W_B*B
 RESCALE_A      = False      # True -> use (A+1)/2 so A and B are both in [0, 1]
 EVAL_EVERY     = 1          # files are already thinned by LOG_EVERY in the sim
 BURN_IN_FRAC   = 0.0        # fraction of the run to discard at the start
 
-# Parameter ranges. `a` lives in [-1, 1], so coefficients are much larger than
-# the 0.027 used for pixel-scale features in the C. elegans script.
 COEFF_RANGE     = (-6.0, 6.0)
 INTERCEPT_RANGE = (-3.0, 3.0)
 L1_HEIGHT_RANGE = (0.0, 1.0)
