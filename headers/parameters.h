@@ -8,7 +8,7 @@
 #define WORM_COUNT 2
 #define WIDTH 3500 //10mm
 #define HEIGHT 3500  //10mm
-#define GRID_N 300 //dx = 0.1mm
+#define GRID_N 1 //dx = 0.1mm
 #define N_STEPS 300
 #define TASK "aggregation"
 #define BLOCK_SIZE 32

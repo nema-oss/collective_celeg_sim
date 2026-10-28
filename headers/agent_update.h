@@ -362,7 +362,7 @@ __device__ __forceinline__ float get_alignment(const Agent* agents, int agent_id
     return cosf(agents[agent_id].angle - agents[partner].angle);
 }
 
-__global__ void updateFishStateCollective(
+/*__global__ void updateFishStateCollective(
         Agent* agents,
         curandState* rng_states,
         int timestep,
@@ -445,6 +445,165 @@ __global__ void updateFishStateCollective(
     agents[agent_id].initial_state_duration = agents[agent_id].state_duration;
 
     rng_states[agent_id] = local_rng;
+}*/
+
+// Assumes states 0, 1, 2 and exactly two fish.
+// Returns follower ID: 0 or 1; -1 if no unique follower exists.
+__device__ int getFollower(const Agent* agents)
+{
+    const Agent a0 = agents[0];
+    const Agent a1 = agents[1];
+
+    const float dx = a1.x - a0.x;
+    const float dy = a1.y - a0.y;
+
+    // Is fish 1 ahead of fish 0?
+    const float q0 = dx * cosf(a0.angle) + dy * sinf(a0.angle);
+
+    // Is fish 0 ahead of fish 1?
+    const float q1 = -dx * cosf(a1.angle) - dy * sinf(a1.angle);
+
+    const bool fish1_ahead = q0 > 0.0f;
+    const bool fish0_ahead = q1 > 0.0f;
+
+    // Exactly one fish sees the other in front.
+    if (fish1_ahead && !fish0_ahead) return 0; // fish 0 follows fish 1
+    if (fish0_ahead && !fish1_ahead) return 1; // fish 1 follows fish 0
+
+    // Head-on, side-by-side ambiguity, or moving apart:
+    // no unique leader; both use baseline transitions.
+    return -1;
+}
+
+__device__ void sampleNewDuration(
+        Agent* agents, int id, int next_state, curandState* rng)
+{
+    const DurationDistribution& dist =
+            d_duration_distributions[next_state];
+
+    const float u = curand_uniform(rng);
+    int idx = 0;
+
+    for (int j = 0; j < dist.n_duration_bins - 1; ++j) {
+        if (u <= dist.duration_prob[j]) {
+            idx = j;
+            break;
+        }
+        idx = j + 1;
+    }
+
+    const int duration = max(dist.duration_bins[idx], 1);
+
+    agents[id].previous_state = agents[id].state;
+    agents[id].state = next_state;
+    agents[id].state_duration = duration;
+    agents[id].initial_state_duration = duration;
+}
+
+__device__ void updateBaselineAgent(
+        Agent* agents, int id, curandState* rng)
+{
+    if (agents[id].state_duration > 0) {
+        agents[id].state_duration--;
+        return;
+    }
+
+    const float mean_transition_matrix[9] = {
+            0.0f,      0.049972f, 0.950028f,
+            0.044170f, 0.0f,      0.955830f,
+            0.467582f, 0.532418f, 0.0f
+    };
+
+    const int cur_s = agents[id].state;
+    float p[N_STATES];
+
+    for (int j = 0; j < N_STATES; ++j)
+        p[j] = mean_transition_matrix[cur_s * N_STATES + j];
+
+    const int next_state = select_next_state(p, rng, N_STATES);
+
+    if (next_state >= 0 && next_state < N_STATES)
+        sampleNewDuration(agents, id, next_state, rng);
+}
+
+__device__ void updateSocialAgent(
+        Agent* agents, int id, curandState* rng, int fish_count)
+{
+    const int agent_state = agents[id].state;
+
+    // Keep the original alignment-based social input.
+    const float a = get_alignment(agents, id, fish_count);
+
+    // L1: state-2 exit probability.
+    if (agents[id].state_duration > 1 && agent_state == 2) {
+        const TransitionModel exit_model = d_exit_models[agent_state];
+
+        const float z = exit_model.coeff * a + exit_model.intercept;
+        const float p_exit =
+                exit_model.height / (1.0f + expf(-z));
+
+        if (curand_uniform(rng) < p_exit)
+            agents[id].state_duration = 0;
+    }
+
+    if (agents[id].state_duration > 1) {
+        agents[id].previous_state = agent_state;
+        agents[id].state_duration--;
+        return;
+    }
+
+    // L2: alignment-dependent transition probabilities.
+    float p[N_STATES];
+    float sum_p = 0.0f;
+
+    for (int j = 0; j < N_STATES; ++j) {
+        const TransitionModel model =
+                d_transition_models[agent_state * N_STATES + j];
+
+        const float z = model.coeff * a + model.intercept;
+        p[j] = model.height / (1.0f + expf(-z));
+        sum_p += p[j];
+    }
+
+    if (sum_p > 0.0f) {
+        for (int j = 0; j < N_STATES; ++j)
+            p[j] /= sum_p;
+    } else {
+        for (int j = 0; j < N_STATES; ++j)
+            p[j] = (j == agent_state) ? 1.0f : 0.0f;
+    }
+
+    const int next_state = select_next_state(p, rng, N_STATES);
+
+    if (next_state >= 0 && next_state < N_STATES)
+        sampleNewDuration(agents, id, next_state, rng);
+}
+
+__global__ void updateFishStateCollective(
+        Agent* agents,
+        curandState* rng_states,
+        int timestep,
+        int worm_count)
+{
+    const int id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= worm_count)
+        return;
+
+    curandState rng = rng_states[id];
+
+    if (worm_count != 2) {
+        // This implementation's leader/follower logic is for two fish.
+        updateBaselineAgent(agents, id, &rng);
+    } else {
+        const int follower = getFollower(agents);
+
+        if (id == follower)
+            updateSocialAgent(agents, id, &rng, worm_count);
+        else
+            updateBaselineAgent(agents, id, &rng);
+    }
+
+    rng_states[id] = rng;
 }
 
 __global__ void moveAgents(Agent* agents, curandState* local_state, int worm_count, int timestep, StateParams* params, int* agent_count_grid) {
