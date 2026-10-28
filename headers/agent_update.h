@@ -454,24 +454,27 @@ __device__ int getFollower(const Agent* agents)
     const Agent a0 = agents[0];
     const Agent a1 = agents[1];
 
-    const float dx = a1.x - a0.x;
-    const float dy = a1.y - a0.y;
+    float dx = a1.x - a0.x;
+    float dy = a1.y - a0.y;
+
+    // Replace WIDTH and HEIGHT with your actual periodic box dimensions.
+    dx -= WIDTH  * nearbyintf(dx / WIDTH);
+    dy -= HEIGHT * nearbyintf(dy / HEIGHT);
 
     // Is fish 1 ahead of fish 0?
-    const float q0 = dx * cosf(a0.angle) + dy * sinf(a0.angle);
+    const float q0 =
+            dx * cosf(a0.angle) + dy * sinf(a0.angle);
 
     // Is fish 0 ahead of fish 1?
-    const float q1 = -dx * cosf(a1.angle) - dy * sinf(a1.angle);
+    const float q1 =
+            -dx * cosf(a1.angle) - dy * sinf(a1.angle);
 
     const bool fish1_ahead = q0 > 0.0f;
     const bool fish0_ahead = q1 > 0.0f;
 
-    // Exactly one fish sees the other in front.
-    if (fish1_ahead && !fish0_ahead) return 0; // fish 0 follows fish 1
-    if (fish0_ahead && !fish1_ahead) return 1; // fish 1 follows fish 0
+    if (fish1_ahead && !fish0_ahead) return 0;
+    if (fish0_ahead && !fish1_ahead) return 1;
 
-    // Head-on, side-by-side ambiguity, or moving apart:
-    // no unique leader; both use baseline transitions.
     return -1;
 }
 
