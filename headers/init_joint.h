@@ -33,7 +33,7 @@ void load_state_duration(DurationDistributionHost* states, const char* filename)
     }
 
     json data = json::parse(file);
-    printf("Loading state data from %s\n", filename);
+    //printf("Loading state data from %s\n", filename);
     for (int i = 0; i < N_STATES; i++)
     {
         auto& s = states[i];
@@ -45,6 +45,7 @@ void load_state_duration(DurationDistributionHost* states, const char* filename)
 }
 
 __constant__ DurationDistribution d_duration_distributions[N_STATES];
+__constant__ DurationDistribution d_duration_distributions_on_food[N_STATES];
 
 
 void upload_duration_distributions(DurationDistributionHost* h_states)
@@ -64,6 +65,27 @@ void upload_duration_distributions(DurationDistributionHost* h_states)
     }
 
     cudaMemcpyToSymbol(d_duration_distributions,
+                       h_gpu_states,
+                       sizeof(DurationDistribution)*N_STATES);
+}
+
+void upload_duration_distributions_on_food(DurationDistributionHost* h_states)
+{
+    DurationDistribution h_gpu_states[N_STATES];
+
+    for (int i = 0; i < N_STATES; i++)
+    {
+        auto& src = h_states[i];
+        auto& dst = h_gpu_states[i];
+
+        dst.n_duration_bins = src.duration_bins.size();
+        cudaMalloc(&dst.duration_bins,  dst.n_duration_bins * sizeof(int));
+        cudaMalloc(&dst.duration_prob,  dst.n_duration_bins * sizeof(float));
+        cudaMemcpy(dst.duration_bins,  src.duration_bins.data(),  dst.n_duration_bins*sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(dst.duration_prob,  src.duration_prob.data(),  dst.n_duration_bins*sizeof(float), cudaMemcpyHostToDevice);
+    }
+
+    cudaMemcpyToSymbol(d_duration_distributions_on_food,
                        h_gpu_states,
                        sizeof(DurationDistribution)*N_STATES);
 }
@@ -107,6 +129,30 @@ static T* device_alloc_copy(const std::vector<T>& src) {
     cuda_check(cudaMemcpy(d_ptr, src.data(),
                           src.size() * sizeof(T), cudaMemcpyHostToDevice), "cudaMemcpy");
     return d_ptr;
+}
+
+
+static void print_joint_summary(const char* path, const std::vector<StateParamsHost>& hp) {
+    printf("\n[%s]\n", path);
+    for (int s = 0; s < (int)hp.size(); ++s) {
+        const auto& sp = hp[s];
+        if (sp.n_durations == 0) { printf("  state %d: EMPTY\n", s); continue; }
+
+        long total = 0, near_zero = 0, exact_zero = 0;
+        double sum_abs_angle = 0.0;
+        for (const auto& obs : sp.obs_data) {
+            for (size_t k = 0; k + 1 < obs.size(); k += 2) {
+                float a = obs[k + 1];
+                total++;
+                sum_abs_angle += std::fabs(a);
+                if (std::fabs(a) < 0.5f) near_zero++;
+                if (a == 0.0f) exact_zero++;
+            }
+        }
+        printf("  state %d: n_dur=%d (%d..%d) obs=%ld mean|angle|=%.3f frac|a|<0.5=%.4f frac a==0=%.4f\n",
+               s, sp.n_durations, sp.durations.front(), sp.durations.back(),
+               total, sum_abs_angle / total, (double)near_zero / total, (double)exact_zero / total);
+    }
 }
 
 // ---- load joint distributions from JSON ------------------------
@@ -214,9 +260,10 @@ static void load_joint(const char* path, std::vector<StateParamsHost>& host_para
 
         }
     }
-    printf("\nSpeed observations:\n");
-    printf("  min = %.6f\n", global_min_speed);
-    printf("  max = %.6f\n", global_max_speed);
+    //printf("\nSpeed observations:\n");
+    //printf("  min = %.6f\n", global_min_speed);
+    //printf("  max = %.6f\n", global_max_speed);
+    //print_joint_summary(path, host_params);
 }
 
 // ---- upload one state to device --------------------------------

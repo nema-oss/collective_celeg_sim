@@ -10,6 +10,50 @@
 #include <fstream>
 #include <stdio.h>
 
+struct IntegrationModel{
+    float w_food, w_phero;
+    float mean_dphi, std_dphi;
+    float min_dphi;
+    float max_dphi;
+};
+
+IntegrationModel* d_integration_model = nullptr;
+
+void allocate_integration_model(
+        float mean_dphi,
+        float std_dphi,
+        float w_food,
+        float w_phero, float min_dphi, float max_dphi
+) {
+    IntegrationModel h_model{
+            w_food,
+            w_phero,
+            mean_dphi,
+            std_dphi, min_dphi, max_dphi
+    };
+
+    if (d_integration_model == nullptr) {
+        cudaMalloc(
+                &d_integration_model,
+                sizeof(IntegrationModel)
+        );
+    }
+
+    cudaMemcpy(
+            d_integration_model,
+            &h_model,
+            sizeof(IntegrationModel),
+            cudaMemcpyHostToDevice
+    );
+}
+
+void free_integration_model() {
+    if (d_integration_model != nullptr) {
+        cudaFree(d_integration_model);
+        d_integration_model = nullptr;
+    }
+}
+
 struct Agent {
     float x, y, angle, speed;  // Position in 2D space
     float angle_change;
@@ -20,13 +64,18 @@ struct Agent {
     int state_duration;
     int initial_state_duration;
     float kappa;
-    float phi;
+    float phi, dphi;
     float run_omega = 0.0f;
     float run_amp = 0.0f;
     float run_bias;
     float previous_phi;
     float prev_raw_sign;
     float bout_sign;
+    int turn_direction;  // +1 = left, -1 = right, 0 = neutral
+    int orbit_direction;
+    int n_neighbors;
+    float food_consumed;
+    float total_food_consumed;
 };
 
 // ── host struct to hold the label array on device ────────────────────────────
@@ -114,6 +163,7 @@ __global__ void initAgents(Agent* agents, curandState* states, unsigned long see
         agents[id].state_duration = 1;
         agents[id].initial_state_duration = 1;
         agents[id].phi = 0.0f;
+        agents[id].dphi = 0.0f;
         agents[id].run_omega = 0.0f;
         agents[id].run_amp = 0.0f;
         agents[id].previous_angle_change = 0.0f;
@@ -138,27 +188,39 @@ __global__ void initAgents(Agent* agents, curandState* states, unsigned long see
         agents[id].previous_state = agents[id].state;
         agents[id].prev_raw_sign = 1.0f;
         agents[id].bout_sign = 1.0f;
+        agents[id].food_consumed = 0.0f;
+        agents[id].total_food_consumed = 0.0f;
 
-        if(ANIMAL_TYPE==1){
-            agents[id].x = WIDTH  / 2.0f + (id == 0 ? -0.5f : 0.5f) * 5.0f;
-            agents[id].y = HEIGHT / 2.0f;
-            agents[id].angle          = 0.0f;
+        if (ANIMAL_TYPE == 1) {
+            const float R = 350.0f;
+            const float separation = 5.0f;
+
+            // Place both fish near the rightmost point of the ring
+            agents[id].x = WIDTH/2;
+            agents[id].y = HEIGHT/2 + R
+                           + (id == 0 ? -0.5f : 0.5f) * separation;
+
+            // Counterclockwise tangent at the top of the ring
+            agents[id].angle = 0.0f;
             agents[id].previous_angle = 0.0f;
 
-            agents[id].speed          = 0.0f;
+            agents[id].speed = 0.0f;
             agents[id].previous_speed = 0.0f;
-            agents[id].angle_change   = 0.0f;
+            agents[id].angle_change = 0.0f;
             agents[id].previous_angle_change = 0.0f;
 
-            // duration 1 -> first update immediately samples a state via L2
-            agents[id].state_duration         = 1;
+            agents[id].state_duration = 1;
             agents[id].initial_state_duration = 1;
 
-            // independent random initial state per fish (worms always started in state 2).
-            // Use `= 2;` instead for the old behaviour.
-            int init_state = min((int)(curand_uniform(&states[id]) * N_STATES), N_STATES - 1);
-            agents[id].state          = init_state;
+            int init_state = min(
+                    (int)(curand_uniform(&states[id]) * N_STATES),
+                    N_STATES - 1
+            );
+
+            agents[id].state = init_state;
             agents[id].previous_state = init_state;
+
+            agents[id].orbit_direction = 1;
         }
 
 

@@ -13,8 +13,8 @@ def load_data(positions_filename, states_filename):
     with open(positions_filename, "rb") as f:
         header = np.fromfile(f, dtype=np.int32, count=2)
         n_steps, n_agents = int(header[0]), int(header[1])
-        positions = np.fromfile(f, dtype=np.float32, count=n_steps * n_agents * 2)
-        positions = positions.reshape(n_steps, n_agents, 2)
+        positions = np.fromfile(f, dtype=np.float32, count=n_steps * n_agents * 3)
+        positions = positions.reshape(n_steps, n_agents, 3)
 
     with open(states_filename, "rb") as f:
         header = np.fromfile(f, dtype=np.int32, count=2)
@@ -39,7 +39,7 @@ def wrap_angle(angle):
 def calculate_observations(positions, states, dt, width=None, height=None):
     """
     positions shape:
-        (n_agents, n_steps, 2)
+        (n_agents, n_steps, 3)  # x, y, angle
 
     states shape:
         (n_agents, n_steps)
@@ -60,7 +60,7 @@ def calculate_observations(positions, states, dt, width=None, height=None):
         # ---------------------------------------------------------
         # Calculate displacement between consecutive frames
         # ---------------------------------------------------------
-        displacement = np.diff(positions[agent], axis=0)
+        displacement = np.diff(positions[agent, :, :2], axis=0)
         if width is not None and height is not None: #periodic wrap
             displacement[:, 0] -= width  * np.round(displacement[:, 0] / width)
             displacement[:, 1] -= height * np.round(displacement[:, 1] / height)
@@ -85,14 +85,8 @@ def calculate_observations(positions, states, dt, width=None, height=None):
         # ---------------------------------------------------------
         # Calculate heading of every displacement vector
         # ---------------------------------------------------------
-        headings = np.arctan2(
-            displacement[:, 1],
-            displacement[:, 0]
-        )
-        headings = np.arctan2(
-            displacement[:, 1],
-            displacement[:, 0]
-        )
+        # headings[k] = heading after the move frame k -> k+1, same indexing as before
+        headings = positions[agent, 1:, 2]
 
         # ---------------------------------------------------------
         # 24-frame centered heading change

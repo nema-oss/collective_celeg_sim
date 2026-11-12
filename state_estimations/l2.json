@@ -1,107 +1,107 @@
 {
   "0": {
     "0": {
-      "p_off_food": 0.0,
-      "tau": -1,
-      "model_coeff": 2.170239229940041,
-      "model_intercept": 0.3022023539165879,
-      "model_height": 1.0,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.025981655567609414,
+      "model_height": 1.0,
+      "model_intercept": -1.7464242816958346,
+      "p_off_food": 0.0,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "1": {
-      "p_off_food": 0.3951612903225806,
-      "tau": -1,
-      "model_coeff": -5.784688128541675,
-      "model_intercept": -0.7113839670829973,
-      "model_height": 0.9862451505468505,
       "mean": 0,
-      "std": 1,
+      "model_coeff": -0.01823840234154936,
+      "model_height": 0.5815229283540958,
+      "model_intercept": -1.9265950618561887,
+      "p_off_food": 0.3951612903225806,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "2": {
-      "p_off_food": 0.6048387096774194,
-      "tau": -1,
-      "model_coeff": 2.2953009229314745,
-      "model_intercept": -2.3657112430685436,
-      "model_height": 0.19931918573342555,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.010582608057197126,
+      "model_height": 0.19091324287838707,
+      "model_intercept": -0.8361157712640686,
+      "p_off_food": 0.6048387096774194,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     }
   },
   "1": {
     "0": {
-      "p_off_food": 0.06286836935166994,
-      "tau": -1,
-      "model_coeff": -0.13835492034101726,
-      "model_intercept": 0.38612608568624296,
-      "model_height": 0.7671516762238367,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.007014700901075737,
+      "model_height": 0.8100829843337025,
+      "model_intercept": 1.3756910686163506,
+      "p_off_food": 0.06286836935166994,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "1": {
-      "p_off_food": 0.0,
-      "tau": -1,
-      "model_coeff": 3.103261687310493,
-      "model_intercept": 1.731097591695777,
-      "model_height": 1.0,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.009008114984460112,
+      "model_height": 1.0,
+      "model_intercept": 0.44515561543353277,
+      "p_off_food": 0.0,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "2": {
-      "p_off_food": 0.93713163064833,
-      "tau": -1,
-      "model_coeff": -2.0181242234513004,
-      "model_intercept": 1.2555590156280445,
-      "model_height": 1.660840202923021,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.0077567768641948025,
+      "model_height": 0.9541989587150099,
+      "model_intercept": -0.3905893488025174,
+      "p_off_food": 0.93713163064833,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     }
   },
   "2": {
     "0": {
-      "p_off_food": 0.16787003610108303,
-      "tau": -1,
-      "model_coeff": -0.8854940449633961,
-      "model_intercept": 0.9666468276126277,
-      "model_height": 0.7487484839736784,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.017007278512110213,
+      "model_height": 0.1885761937764468,
+      "model_intercept": 0.4356100267838303,
+      "p_off_food": 0.16787003610108303,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "1": {
-      "p_off_food": 0.8321299638989169,
-      "tau": -1,
-      "model_coeff": 0.06800278569166185,
-      "model_intercept": 0.16084722156795417,
-      "model_height": 0.7084218668243913,
       "mean": 0,
-      "std": 1,
+      "model_coeff": -0.0253878999131596,
+      "model_height": 1.0893196540893724,
+      "model_intercept": 0.05625810054617997,
+      "p_off_food": 0.8321299638989169,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     },
     "2": {
-      "p_off_food": 0.0,
-      "tau": -1,
-      "model_coeff": 1.0869112864254955,
-      "model_intercept": -1.1048331837132441,
-      "model_height": 1.0,
       "mean": 0,
-      "std": 1,
+      "model_coeff": 0.017073076652228344,
+      "model_height": 1.0,
+      "model_intercept": 1.1521841206236942,
+      "p_off_food": 0.0,
       "p_relevant": 0,
-      "sign": 1
+      "sign": 1,
+      "std": 1,
+      "tau": -1
     }
   }
 }

@@ -53,6 +53,19 @@ void init_pheromone_grid(float* h_phi, int* h_agent_count_grid, float** d_phi)
     cudaMemcpy(*d_phi, h_phi, sizeof(float) * GRID_N * GRID_N, cudaMemcpyHostToDevice);
 }
 
+//init pheromone grid and upload it to device
+void init_food_grid(float* h_food, float** d_food, float food_amount)
+{
+    for (int i = 0; i < GRID_N; i++) {
+        for (int j = 0; j < GRID_N; j++) {
+            int idx = i * GRID_N + j;
+            h_food[idx] = food_amount;
+        }
+    }
+    cudaMalloc((void**)d_food, sizeof(float) * GRID_N * GRID_N);
+    cudaMemcpy(*d_food, h_food, sizeof(float) * GRID_N * GRID_N, cudaMemcpyHostToDevice);
+}
+
 // Function to compute the Laplacian (second derivative)
 __device__ float laplacian(const float* grid, int i, int j)
 {
@@ -120,5 +133,24 @@ __global__ void updateGrid(float* phi_grid, int* count_grid, float* new_phi_grid
     }
 }
 
+__global__ void updateFoodGrid(
+        float* food_grid,
+        int* count_grid,
+        float* new_food_grid
+) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    int j = threadIdx.y + blockIdx.y * blockDim.y;
+
+    if (i < GRID_N && j < GRID_N) {
+        int idx = i * GRID_N + j;
+
+        float consumption = c_cfg.food_consumption * count_grid[idx];
+
+        new_food_grid[idx] = fmaxf(
+                0.0f,
+                food_grid[idx] - consumption
+        );
+    }
+}
 
 #endif //UNTITLED2_GRID_UPDATE_H
