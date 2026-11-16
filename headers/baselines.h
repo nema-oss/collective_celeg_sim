@@ -31,7 +31,7 @@ static bool lookup_baseline(const Options& opt, IntegrationModel& m) {
     }
     m = it->second;
     m.w_phero = opt.w_phero;
-    m.w_food  = 1.0f - opt.w_phero;
+    m.w_food  = opt.w_food;
     return true;
 }
 #endif //UNTITLED2_BASELINES_H

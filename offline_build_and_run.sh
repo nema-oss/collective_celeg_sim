@@ -14,10 +14,12 @@ im=""
 cond=""
 worm_count=""
 w_phero=""
+w_food=""
 out=""
 skip_build=0
 lambda=""
 nsga=0
+resume=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --seed)
@@ -60,8 +62,16 @@ while [[ $# -gt 0 ]]; do
                     nsga=1
                     shift
                     ;;
+        --resume)
+                    resume=1
+                    shift
+                    ;;
         --lambda)
                     lambda="$2"
+                    shift 2
+                    ;;
+        --w-food)
+                    w_food="$2"
                     shift 2
                     ;;
         *)
@@ -91,6 +101,9 @@ fi
 if [[ -n "$w_phero" ]]; then
     EXTRA_ARGS+=(--w-phero "$w_phero")
 fi
+if [[ -n "$w_food" ]]; then
+    EXTRA_ARGS+=(--w-food "$w_food")
+fi
 if [[ -n "$out" ]]; then
     EXTRA_ARGS+=(--out "$out")
 fi
@@ -99,6 +112,9 @@ if [[ -n "$lambda" ]]; then
 fi
 if [[ "$nsga" -eq 1 ]]; then
     EXTRA_ARGS+=(--nsga)
+fi
+if [[ "$resume" -eq 1 ]]; then
+    EXTRA_ARGS+=(--resume)
 fi
 
 # Get the directory of the script

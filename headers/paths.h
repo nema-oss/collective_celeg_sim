@@ -12,7 +12,7 @@ namespace path {
     constexpr const char* DURATION_OFF_FOOD = "/state_estimations/behavior_distributions_off_food.json";
     constexpr const char* JOINT_ON_FOOD     = "/state_estimations/on_food_joint_distributions.json";
     constexpr const char* DURATION_ON_FOOD  = "/state_estimations/on_food_duration_distributions.json";
-    constexpr const char* EXIT_PARAMS       = "/state_estimations/l1.json";
+    constexpr const char* EXIT_PARAMS       = "/state_estimations/l1.json";//"/state_estimations/best_dphi_compound_metric/l1_aggregation.json";
     constexpr const char* TRANSITION_PARAMS = "/state_estimations/l2.json";
 }
 
@@ -36,12 +36,13 @@ static std::string sink(const Options& opt, const char* name) {
 }
 
 static std::string run_dir(const Options& opt, int run) {
-    char w[16], l[16];
-    snprintf(w, sizeof(w), "%.2f", opt.w_phero);
-    snprintf(l, sizeof(l), "%.2f", opt.lambda);
+    char wp[16], wf[16], l[16];
+    snprintf(wp, sizeof(wp), "%.2f", opt.w_phero);
+    snprintf(wf, sizeof(wf), "%.2f", opt.w_food);
+    snprintf(l,  sizeof(l),  "%.2f", opt.lambda);
     return opt.out_dir + "/im" + std::to_string(opt.integration_model) + "/" +
            condition_name(opt.condition) + "/" + std::to_string(opt.worm_count) +
-           "w/lambda_" + l + "/wphero_" + w + "/run_" + std::to_string(run);
+           "w/lambda_" + l + "/wphero_" + wp + "/wfood_" + wf + "/run_" + std::to_string(run);
 }
 
 static std::string positions_path(const Options& opt) {

@@ -905,20 +905,20 @@ __global__ void updateAgentStateCollective(
     float phi = get_local_pheromone(agents[agent_id], phi_grid);
     float dphi = (phi - agents[agent_id].previous_phi) / DT;
     agents[agent_id].previous_phi = phi;
-
+    //float dphi_star  = (dphi - m->mean_dphi) / m->std_dphi;
     float integrated_signal;
     if(c_cfg.integration_model==0 && c_cfg.food_amount>0.0f){
         //normalise dphi
         float dphi_star = (dphi - integration_model->mean_dphi) / integration_model->std_dphi;
         float food_level = get_local_pheromone(agents[agent_id], food_grid);
         //project food [0,1] -> dphi [R]
-        food_level = integration_model->min_dphi + food_level * (integration_model->max_dphi-integration_model->min_dphi);
+        //food_level = integration_model->min_dphi + food_level * (integration_model->max_dphi-integration_model->min_dphi);
         //normalise food
-        float food_norm = (food_level - integration_model->mean_dphi)/integration_model->std_dphi;
+        //float food_norm = (food_level - integration_model->mean_dphi)/integration_model->std_dphi;
         //weight
-        integrated_signal = integration_model->w_food * food_norm + integration_model->w_phero * dphi_star;
+        //integrated_signal = integration_model->w_food * food_norm + integration_model->w_phero * dphi_star;
         //de-normalize for L1/L2(dphi)
-        integrated_signal = integration_model->mean_dphi + integrated_signal*integration_model->std_dphi;
+        integrated_signal = integration_model->w_food * food_level + integration_model->w_phero * dphi_star;
     } else{
         integrated_signal = dphi;
     }

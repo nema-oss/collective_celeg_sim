@@ -7,6 +7,8 @@
 #pragma once
 #include "deps.h"
 
+constexpr float W_MIN = -1.0f, W_MAX = 1.0f;   // or 0.0f, 1.0f
+
 enum class Condition { Off, Slow, Fast };
 
 struct Options {
@@ -18,21 +20,25 @@ struct Options {
     int         integration_model = 0;
     Condition   condition         = Condition::Off;
     float       w_phero           = 0.5f;
+    float       w_food            = 0.5f;
     std::string out_dir           = "/sim/integration_comparison";
 
     bool replay() const { return agent_id >= 0 && ENABLE_DETERMINISTIC_REPLAY; }
 
     bool        quiet       = false;
     bool        nsga        = false;
-    int         pop         = 80;
-    int         gens        = 200;
+    int         pop         = 100;
+    int         gens        = 1000;
     int         eval_seeds  = 5;
     std::string l1_path;
     std::string l2_path;
 
     double tol_nu   = 0.01;
     double tol_fc   = 0.005;
-    int    patience = 50;
+    int    patience = 100;
+    bool resume = false;
+    double tol_hv = 0.01;
+
 };
 
 static const char* condition_name(Condition c) {
@@ -58,6 +64,7 @@ static Options parse_options(int argc, char* argv[]) {
     Options opt;
     for (int i = 1; i < argc; i++) {
         if      (strcmp(argv[i], "--nsga") == 0)         opt.nsga       = true;
+        else if (strcmp(argv[i], "--resume") == 0)       opt.resume     = true;
         else if (is_flag(argc, argv, i, "--pop"))        opt.pop        = atoi(argv[++i]);
         else if (is_flag(argc, argv, i, "--gens"))       opt.gens       = atoi(argv[++i]);
         else if (is_flag(argc, argv, i, "--eval-seeds")) opt.eval_seeds = atoi(argv[++i]);
@@ -78,6 +85,7 @@ static Options parse_options(int argc, char* argv[]) {
         else if (is_flag(argc, argv, i, "--tol-nu"))   opt.tol_nu   = atof(argv[++i]);
         else if (is_flag(argc, argv, i, "--tol-fc"))   opt.tol_fc   = atof(argv[++i]);
         else if (is_flag(argc, argv, i, "--patience")) opt.patience = atoi(argv[++i]);
+        else if (is_flag(argc, argv, i, "--w-food")) opt.w_food = atof(argv[++i]);
     }
     return opt;
 }

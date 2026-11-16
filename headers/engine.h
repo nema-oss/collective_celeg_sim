@@ -23,6 +23,12 @@ int engine(int argc, char* argv[]) {
         fprintf(stderr, "--w-phero must be in [0, 1], got %f\n", opt.w_phero);
         return 1;
     }
+    if (opt.w_phero < W_MIN || opt.w_phero > W_MAX ||
+        opt.w_food  < W_MIN || opt.w_food  > W_MAX) {
+        fprintf(stderr, "weights must be in [%g, %g], got w_phero=%f w_food=%f\n",
+                W_MIN, W_MAX, opt.w_phero, opt.w_food);
+        return 1;
+    }
     IntegrationModel probe;
     if (!lookup_baseline(opt, probe)) return 1;
 

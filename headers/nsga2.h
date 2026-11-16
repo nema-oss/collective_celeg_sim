@@ -11,6 +11,7 @@
 #include <random>
 #include <chrono>
 #include "run.h"
+#include <sstream>
 
 namespace nsga {
 
@@ -21,10 +22,10 @@ namespace nsga {
     struct Layout {
         std::vector<Gene> genes;
         int l2[9][3];
-        int w_phero;
+        int w_phero, w_food;
 
         Layout() {
-            const Gene coeff{-0.027, 0.027}, intercept{-2.5, 2.5};
+            const Gene coeff{-5.0f, 5.0f}, intercept{-2.5, 2.5};
             genes = {coeff, intercept, {0.0, 1.0}};
             for (int t = 0; t < 9; ++t) {
                 l2[t][0] = genes.size(); genes.push_back(coeff);
@@ -35,7 +36,8 @@ namespace nsga {
                     l2[t][2] = genes.size(); genes.push_back({0.0, 2.0});
                 }
             }
-            w_phero = genes.size(); genes.push_back({0.0, 1.0});
+            w_phero = genes.size(); genes.push_back({W_MIN, W_MAX});
+            w_food  = genes.size(); genes.push_back({W_MIN, W_MAX});
         }
 
         std::vector<double> decode(const std::vector<double>& x) const {
@@ -45,6 +47,13 @@ namespace nsga {
             return v;
         }
 
+        std::vector<double> encode(const std::vector<double>& v) const {
+            std::vector<double> x(v.size());
+            for (size_t i = 0; i < v.size(); ++i)
+                x[i] = std::min(1.0, std::max(0.0, (v[i] - genes[i].lo) / (genes[i].hi - genes[i].lo)));
+            return x;
+        }
+
         std::string header() const {
             std::string h = "gen,rank,nu,fc,frac,l1_coeff,l1_intercept,l1_height";
             for (int t = 0; t < 9; ++t) {
@@ -52,7 +61,7 @@ namespace nsga {
                 h += p + "_coeff" + p + "_intercept";
                 if (l2[t][2] >= 0) h += p + "_height";
             }
-            return h + ",w_phero\n";
+            return h + ",w_phero,w_food\n";
         }
     };
 
@@ -105,6 +114,7 @@ namespace nsga {
 
             Options o = opt;
             o.w_phero = v[layout.w_phero];
+            o.w_food  = v[layout.w_food];
 
             double nu_sum = 0, fc_sum = 0, frac_sum = 0;
             bool ok = true;
@@ -217,8 +227,6 @@ namespace nsga {
         csv.flush();
     }
 
-
-
     using Clock = std::chrono::steady_clock;
 
     static std::string fmt_hms(double seconds) {
@@ -275,20 +283,144 @@ namespace nsga {
         }
     };
 
+    static bool load_history(const std::string& path, const Layout& layout, int pop_size,
+                             std::vector<Ind>& pop, int& last_gen) {
+        std::ifstream in(path);
+        if (!in) { fprintf(stderr, "cannot open %s\n", path.c_str()); return false; }
+
+        const size_t n_cols = 5 + layout.genes.size();   // gen,rank,nu,fc,frac + genes
+        std::string header, line;
+        std::getline(in, header);
+        if (header != layout.header().substr(0, layout.header().size() - 1)) {
+            fprintf(stderr, "history header does not match the current gene layout\n");
+            return false;
+        }
+
+        struct Row { int gen; std::vector<double> v; std::string text; };
+        std::vector<Row> rows;
+        std::map<int, int> per_gen;
+
+        while (std::getline(in, line)) {
+            if (line.empty()) continue;
+            std::stringstream ss(line);
+            std::string cell;
+            std::vector<double> v;
+            try {
+                while (std::getline(ss, cell, ',')) v.push_back(std::stod(cell));
+            } catch (...) { break; }                       // truncated last line
+            if (v.size() != n_cols) break;
+            rows.push_back({(int)v[0], v, line});
+            ++per_gen[(int)v[0]];
+        }
+
+        last_gen = -1;
+        for (const auto& kv : per_gen)
+            if (kv.second == pop_size) last_gen = kv.first;
+        if (last_gen < 0) { fprintf(stderr, "no complete generation in %s\n", path.c_str()); return false; }
+
+        pop.clear();
+        std::ofstream out(path, std::ios::trunc);          // drop any partial generation after last_gen
+        out << header << '\n';
+        for (const Row& r : rows) {
+            if (r.gen > last_gen) continue;
+            out << r.text << '\n';
+            if (r.gen != last_gen) continue;
+
+            Ind ind;
+            ind.nu   = r.v[2];
+            ind.fc   = r.v[3];
+            ind.frac = r.v[4];
+            ind.f[0] = -ind.nu;
+            ind.f[1] = -ind.fc;
+            ind.x    = layout.encode(std::vector<double>(r.v.begin() + 5, r.v.end()));
+            pop.push_back(std::move(ind));
+        }
+        return true;
+    }
+
+    struct Scale { double nu, fc; };
+
+    static double hypervolume(const std::vector<Ind>& pop, const Scale& s) {
+        std::vector<std::pair<double, double>> pts;          // normalized (nu, fc)
+        for (const Ind& ind : pop)
+            if (ind.rank == 0 && ind.nu >= 0 && ind.fc >= 0)  // skips failed evals (-1e9)
+                pts.push_back({ind.nu / s.nu, ind.fc / s.fc});
+        std::sort(pts.rbegin(), pts.rend());                  // nu descending
+
+        double hv = 0, run_max = 0;
+        for (size_t i = 0; i < pts.size(); ++i) {
+            run_max = std::max(run_max, pts[i].second);
+            const double next_nu = i + 1 < pts.size() ? pts[i + 1].first : 0.0;
+            hv += (pts[i].first - next_nu) * run_max;
+        }
+        return hv;
+    }
+
+    struct HvStall {
+        double best  = 0;
+        int    stale = 0;
+
+        bool update(double hv, double tol, int patience) {
+            if (hv > best * (1.0 + tol)) stale = 0; else ++stale;
+            best = std::max(best, hv);
+            return patience > 0 && stale >= patience;
+        }
+    };
+
     static int run(const Options& base) {
         if (base.condition == Condition::Off)
             fprintf(stderr, "warning: condition is off, food consumed is always 0\n");
 
         Problem pb(base);
+        const SimConfig cfg = make_config(base);
+        const Scale scale{
+                std::max(1.0, base.worm_count - 1.0),                          // max possible neighbors
+                std::max(1e-9, (double)GRID_N * GRID_N * cfg.food_amount / base.worm_count)  // intake if all food is eaten
+        };
         std::mt19937 rng(base.seed);
         std::uniform_real_distribution<double> U(0.0, 1.0);
         const int n_genes = pb.layout.genes.size();
-        Progress progress(base.pop * (base.gens + 1));
+
         make_dirs(base.out_dir + "/nsga");
-        std::ofstream csv(base.out_dir + "/nsga/history.csv");
-        csv << pb.layout.header();
-        Stall stall;
-        std::vector<Ind> pop(base.pop);
+        const std::string hist = base.out_dir + "/nsga/history.csv";
+
+        std::vector<Ind> pop;
+        int start_gen = 1;
+
+        if (base.resume) {
+            int last_gen = 0;
+            if (!load_history(hist, pb.layout, base.pop, pop, last_gen)) return 1;
+            start_gen = last_gen + 1;
+            rng.seed(base.seed + 1000 * last_gen);          // fresh stream, not a replay of the original
+            printf("resuming from gen %d (%d individuals), target gen %d\n", last_gen, (int)pop.size(), base.gens);
+        }
+
+        std::ofstream csv(hist, base.resume ? std::ios::app : std::ios::trunc);
+        csv.precision(10);
+
+        const int remaining = std::max(0, base.gens - start_gen + 1);
+        Progress progress(base.resume ? base.pop * remaining : base.pop * (base.gens + 1));
+
+        if (!base.resume) {
+            csv << pb.layout.header();
+            pop.resize(base.pop);
+            for (Ind& ind : pop) {
+                ind.x.resize(n_genes);
+                for (double& g : ind.x) g = U(rng);
+                progress.timed([&] { pb.evaluate(ind); });
+            }
+        }
+
+        for (auto& fr : sort_fronts(pop)) crowding(pop, fr);
+
+        if (!base.resume) {
+            log_population(csv, pb, pop, 0);
+            const double gen0 = std::chrono::duration<double>(Clock::now() - progress.start).count();
+            printf("gen 0 took %s; estimated total ~%s for %d evals\n",
+                   fmt_hms(gen0).c_str(), fmt_hms(gen0 / base.pop * progress.total).c_str(), progress.total);
+        }
+
+        Stall stall;   // if you added early stopping; it restarts from scratch on resume
         // initial population
         for (Ind& ind : pop) {
             ind.x.resize(n_genes);
@@ -300,7 +432,9 @@ namespace nsga {
         const double gen0 = std::chrono::duration<double>(Clock::now() - progress.start).count();
         printf("gen 0 took %s; estimated total ~%s for %d evals\n",
                fmt_hms(gen0).c_str(), fmt_hms(gen0 / base.pop * progress.total).c_str(), progress.total);
-        for (int gen = 1; gen <= base.gens; ++gen) {
+        HvStall hv_stall;
+        hv_stall.best = hypervolume(pop, scale);
+        for (int gen = start_gen; gen <= base.gens; ++gen) {
             std::vector<Ind> all = pop;
             for (int i = 0; i < base.pop; ++i) {
                 // children
@@ -325,19 +459,29 @@ namespace nsga {
 
             int front0 = 0;
             for (const Ind& ind : pop) front0 += ind.rank == 0;
-            printf("gen %d: front size %d\n", gen, front0);
+            //printf("gen %d: front size %d\n", gen, front0);
             log_population(csv, pb, pop, gen);
-            if (stall.update(pop, base.tol_nu, base.tol_fc, base.patience)) {
+            const double hv = hypervolume(pop, scale);
+            printf("gen %d: front size %d, hv %.5f\n", gen, front0, hv);   // replaces the old front-size printf
+            if (hv_stall.update(hv, base.tol_hv, base.patience)) {
+                printf("stopping at gen %d: hypervolume improved <%.1f%% for %d generations\n",
+                       gen, 100 * base.tol_hv, base.patience);
+                break;
+            }
+            /*if (stall.update(pop, base.tol_nu, base.tol_fc, base.patience)) {
                 printf("stopping at gen %d: no improvement beyond tolerance for %d generations\n",
                        gen, base.patience);
                 break;
-            }
+            }*/
         }
 
-        printf("pareto front (nu, fc, w_phero):\n");
+        printf("pareto front (nu, fc, w_phero, w_food):\n");
         for (const Ind& ind : pop)
-            if (ind.rank == 0)
-                printf("  %.3f  %.4f  %.3f\n", ind.nu, ind.fc, pb.layout.decode(ind.x)[pb.layout.w_phero]);
+            if (ind.rank == 0) {
+                const std::vector<double> v = pb.layout.decode(ind.x);
+                printf("  %.3f  %.4f  %.3f  %.3f\n", ind.nu, ind.fc,
+                       v[pb.layout.w_phero], v[pb.layout.w_food]);
+            }
         return 0;
     }
 
