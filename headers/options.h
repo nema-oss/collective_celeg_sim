@@ -7,7 +7,7 @@
 #pragma once
 #include "deps.h"
 
-constexpr float W_MIN = -1.0f, W_MAX = 1.0f;   // or 0.0f, 1.0f
+constexpr float W_MIN = 0.0f, W_MAX = 1.0f;   // or 0.0f, 1.0f
 
 enum class Condition { Off, Slow, Fast };
 

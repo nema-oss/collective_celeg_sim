@@ -12,8 +12,8 @@ namespace path {
     constexpr const char* DURATION_OFF_FOOD = "/state_estimations/behavior_distributions_off_food.json";
     constexpr const char* JOINT_ON_FOOD     = "/state_estimations/on_food_joint_distributions.json";
     constexpr const char* DURATION_ON_FOOD  = "/state_estimations/on_food_duration_distributions.json";
-    constexpr const char* EXIT_PARAMS       = "/state_estimations/l1.json";//"/state_estimations/best_dphi_compound_metric/l1_aggregation.json";
-    constexpr const char* TRANSITION_PARAMS = "/state_estimations/l2.json";
+    constexpr const char* EXIT_PARAMS       = "/state_estimations/l1.json";//"/state_estimations/best_dphi_compound_metric/l1_aggregation.json";//
+    constexpr const char* TRANSITION_PARAMS = "/state_estimations/l2.json";//"/state_estimations/best_dphi_compound_metric/l2_aggregation.json";//
 }
 
 namespace outfile {

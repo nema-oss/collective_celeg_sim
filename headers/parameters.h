@@ -31,7 +31,7 @@ std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
 #define METRIC_TYPE 1 // 0->cluster metric, 1->compound metric
 #define ANIMAL_TYPE 0 // 0->worm, 1-> fish
 #define FOOD_AMOUNT 1.0f
-#define FOOD_CONSUMPTION 0.0111111111f//0.0055555556f//
+#define FOOD_CONSUMPTION 0.0055555556f//0.0111111111f//
 #define ENABLE_DETERMINISTIC_REPLAY 0
 #define LOG_EVERY 1
 #define INTEGRATION_MODEL 0// 0: input integration (z=phi+food); 1: output integration (z=L(phi)+T(food))

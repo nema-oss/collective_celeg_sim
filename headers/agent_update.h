@@ -919,6 +919,7 @@ __global__ void updateAgentStateCollective(
         //integrated_signal = integration_model->w_food * food_norm + integration_model->w_phero * dphi_star;
         //de-normalize for L1/L2(dphi)
         integrated_signal = integration_model->w_food * food_level + integration_model->w_phero * dphi_star;
+        //integrated_signal = dphi;
     } else{
         integrated_signal = dphi;
     }
