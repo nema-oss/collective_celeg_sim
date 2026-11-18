@@ -6,11 +6,12 @@
 #define UNTITLED2_PARAMETERS_H
 #define N_STATES 3
 #define WORM_COUNT 1000
-#define WIDTH 10 //mm
-#define HEIGHT 10  //mm
-#define GRID_N 100 //dx = WIDTH/GRID_N [mm]
+#define WIDTH 60 //mm
+#define HEIGHT 60  //mm
+#define GRID_N 600 //dx = WIDTH/GRID_N [mm]
 #define N_STEPS 1800
-#define TASK "aggregation"
+#define TASK "dispersal"
+static const bool DISPERSE = (strcmp(TASK, "dispersal") == 0);
 #define BLOCK_SIZE 32
 #define SEED 1333
 std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
@@ -35,7 +36,7 @@ std::string* state_ids = new std::string[N_STATES]{"0", "1", "2"};
 #define ENABLE_DETERMINISTIC_REPLAY 0
 #define LOG_EVERY 1
 #define INTEGRATION_MODEL 0// 0: input integration (z=phi+food); 1: output integration (z=L(phi)+T(food))
-#define LEAN_LOG 1 //if set to 1, saves only positions, neighbor count and food grid.
+#define LEAN_LOG 0 //if set to 1, saves only positions, neighbor count and food grid.
 
 struct SimConfig {
     int   integration_model  = 0;

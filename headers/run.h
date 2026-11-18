@@ -86,6 +86,7 @@ static bool run_once(const Options& opt, double& mean_neighbors,
         out.agent_grid = open_grid_stream(sink(opt, outfile::AGENT_COUNT_GRID).c_str(), N_STEPS, GRID_N);
         out.phi_grid   = open_grid_stream(sink(opt, outfile::PHEROMONE_GRID).c_str(), N_STEPS, GRID_N);
         out.states     = open_agent_stream(sink(opt, outfile::STATES).c_str(), n_logged, opt.worm_count);
+        out.positions = open_agent_stream(sink(opt, outfile::POSITIONS).c_str(), n_logged, opt.worm_count);
     }
 
     HostState host(opt.worm_count);

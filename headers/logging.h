@@ -65,6 +65,7 @@ void write_grid_step(FILE* f, const T* grid, int grid_n) {
 FILE* open_agent_stream(const char* filename, int n_steps, int worm_count) {
     FILE* f = fopen(filename, "wb");
     if (!f) throw std::runtime_error(std::string("Cannot open ") + filename);
+    //printf("opening %s\n", filename);
     setvbuf(f, NULL, _IOFBF, 1 << 20);
     int32_t ns = n_steps, wc = worm_count;
     fwrite(&ns, sizeof(int32_t), 1, f);

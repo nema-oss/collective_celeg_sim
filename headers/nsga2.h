@@ -81,6 +81,11 @@ namespace nsga {
                 {"mean", 0}, {"std", 1}, {"p_relevant", 0}, {"sign", 1}};
     }
 
+    static void set_objectives(Ind& ind) {
+        ind.f[0] = DISPERSE ? ind.nu : -ind.nu;
+        ind.f[1] = -ind.fc;
+    }
+
     struct Problem {
         Layout  layout;
         json    off;
@@ -134,8 +139,7 @@ namespace nsga {
                 ind.fc   = fc_sum / opt.eval_seeds;
                 ind.frac = frac_sum / opt.eval_seeds;
             }
-            ind.f[0] = -ind.nu;
-            ind.f[1] = -ind.fc;
+            set_objectives(ind);
         }
     };
 
@@ -343,8 +347,10 @@ namespace nsga {
     static double hypervolume(const std::vector<Ind>& pop, const Scale& s) {
         std::vector<std::pair<double, double>> pts;          // normalized (nu, fc)
         for (const Ind& ind : pop)
-            if (ind.rank == 0 && ind.nu >= 0 && ind.fc >= 0)  // skips failed evals (-1e9)
-                pts.push_back({ind.nu / s.nu, ind.fc / s.fc});
+            if (ind.rank == 0 && ind.nu >= 0 && ind.fc >= 0){  // skips failed evals (-1e9)
+                const double a = DISPERSE ? (s.nu - ind.nu) : ind.nu;
+                pts.push_back({a / s.nu, ind.fc / s.fc});
+            }
         std::sort(pts.rbegin(), pts.rend());                  // nu descending
 
         double hv = 0, run_max = 0;

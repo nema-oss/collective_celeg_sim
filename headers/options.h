@@ -21,7 +21,7 @@ struct Options {
     Condition   condition         = Condition::Off;
     float       w_phero           = 0.5f;
     float       w_food            = 0.5f;
-    std::string out_dir           = "/sim/integration_comparison";
+    std::string out_dir           = "/sim";
 
     bool replay() const { return agent_id >= 0 && ENABLE_DETERMINISTIC_REPLAY; }
 
@@ -38,6 +38,8 @@ struct Options {
     int    patience = 100;
     bool resume = false;
     double tol_hv = 0.01;
+
+    bool out_given = false;
 
 };
 
@@ -81,7 +83,7 @@ static Options parse_options(int argc, char* argv[]) {
                 exit(1);
             }
         }
-        else if (is_flag(argc, argv, i, "--out"))        opt.out_dir           = argv[++i];
+        else if (is_flag(argc, argv, i, "--out")) { opt.out_dir = argv[++i]; opt.out_given = true; }
         else if (is_flag(argc, argv, i, "--tol-nu"))   opt.tol_nu   = atof(argv[++i]);
         else if (is_flag(argc, argv, i, "--tol-fc"))   opt.tol_fc   = atof(argv[++i]);
         else if (is_flag(argc, argv, i, "--patience")) opt.patience = atoi(argv[++i]);

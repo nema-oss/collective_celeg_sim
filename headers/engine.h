@@ -34,14 +34,17 @@ int engine(int argc, char* argv[]) {
 
     const int N_ENSEMBLE = opt.run_idx >= 0 ? 1 : 5;
     std::vector<double> run_means, run_fracs, run_intakes;
+    const int n_runs = opt.out_given ? N_ENSEMBLE : 1;
 
     try {
         if (opt.nsga) return nsga::run(opt);
 
-        for (int n = 0; n < N_ENSEMBLE; ++n) {
+        for (int n = 0; n < n_runs; ++n) {
             Options run_opt = opt;
-            run_opt.seed   += n;
-            run_opt.out_dir = run_dir(opt, n);
+            if (opt.out_given) {
+                run_opt.seed   += n;
+                run_opt.out_dir = run_dir(opt, n);
+            }
 
             double mean_neighbors = 0.0, food_fraction = 0.0, mean_intake = 0.0;
             if (!run_once(run_opt, mean_neighbors, &food_fraction, &mean_intake))
